@@ -23,11 +23,13 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 private const val METADATA_TIMEOUT_MS = 60_000L
+private const val MS_PER_SECOND = 1_000L
 private const val WAIT_STEP_MS = 500L
 private const val MIN_UPLOAD_BYTES_PER_SECOND = 1024
 
 /**
  * One libtorrent session for the whole app. Blocking calls: use them off the main thread.
+ * Exception messages are shown to the user as they are, so they are in Russian.
  *
  * Torrents are added with nothing selected; reading a file through [TorrentDataSource]
  * is what makes it download, so a discography torrent never pulls every album.
@@ -85,7 +87,7 @@ class TorrentEngine(
                     .infoHashes.best
                     .toHex()
             } catch (e: IllegalArgumentException) {
-                throw IOException("Not a magnet link", e)
+                throw IOException("Это не magnet-ссылка", e)
             }
         if (find(hash) == null && !addCached(hash)) {
             session.download(magnet, downloadsDir, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
@@ -101,17 +103,21 @@ class TorrentEngine(
             try {
                 TorrentInfo.bdecode(bytes)
             } catch (e: IllegalArgumentException) {
-                throw IOException("Not a .torrent file", e)
+                throw IOException("Трекер вернул не .torrent-файл", e)
             }
         val hash = info.infoHash().toHex()
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(bytes)
-        if (find(hash) == null && !addCached(hash)) throw IOException("Could not add torrent $hash")
+        if (find(hash) == null && !addCached(hash)) throw IOException("Не удалось добавить торрент $hash")
         return awaitMetadata(hash)
     }
 
     /** A torrent that was opened before, from the session or from the .torrent cache. */
     fun handle(hash: String): TorrentHandle {
-        if (find(hash) == null && !addCached(hash)) throw IOException("Unknown torrent $hash")
+        if (find(hash) == null &&
+            !addCached(hash)
+        ) {
+            throw IOException("Торрент $hash не найден: откройте его заново через поиск")
+        }
         return awaitMetadata(hash)
     }
 
@@ -131,7 +137,7 @@ class TorrentEngine(
         if (!file.exists()) return false
         val error = error_code()
         val params = libtorrent.load_torrent_file(file.absolutePath, error, load_torrent_limits())
-        if (error.value() != 0) throw IOException("Broken cached torrent $hash: ${error.message()}")
+        if (error.value() != 0) throw IOException("Сохранённый торрент $hash повреждён: ${error.message()}")
         params.setSave_path(downloadsDir.absolutePath)
         params.setFlags(params.getFlags().or_(TorrentFlags.DEFAULT_DONT_DOWNLOAD))
         session.swig().async_add_torrent(params)
@@ -140,7 +146,10 @@ class TorrentEngine(
 
     private fun awaitMetadata(hash: String): TorrentHandle {
         val isReady = awaitUntil(METADATA_TIMEOUT_MS) { find(hash)?.status()?.hasMetadata() == true }
-        if (!isReady) throw IOException("No metadata for $hash: no peers found")
+        if (!isReady) {
+            val seconds = METADATA_TIMEOUT_MS / MS_PER_SECOND
+            throw IOException("За $seconds с не нашлось ни одного пира: раздача мёртвая или сеть режет торренты")
+        }
         return requireNotNull(find(hash))
     }
 
