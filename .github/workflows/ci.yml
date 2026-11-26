@@ -32,12 +32,15 @@ jobs:
         run: ./gradlew ktlintCheck --stacktrace
 
       - name: detekt
+        if: ${{ !cancelled() }}
         run: ./gradlew detekt --stacktrace
 
       - name: Android Lint
+        if: ${{ !cancelled() }}
         run: ./gradlew lintDebug lintRelease --stacktrace
 
       - name: Unit tests
+        if: ${{ !cancelled() }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Assemble debug APK
