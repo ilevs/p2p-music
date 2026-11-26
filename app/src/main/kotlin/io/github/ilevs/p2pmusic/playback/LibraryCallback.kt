@@ -87,7 +87,7 @@ class LibraryCallback(
         val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
         scope.launch {
             runCatching { stream.restore() }
-                .onSuccess { future.set(it) ?: future.setException(IOException("Nothing to resume")) }
+                .onSuccess { if (it != null) future.set(it) else future.setException(IOException("Nothing to resume")) }
                 .onFailure { future.setException(it) }
         }
         return future

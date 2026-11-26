@@ -46,6 +46,15 @@
       </intent-filter>
     </service>
 
+    <!-- Media buttons (steering wheel, headset, system "resume") start playback while the app is closed. -->
+    <receiver
+      android:name="androidx.media3.session.MediaButtonReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MEDIA_BUTTON" />
+      </intent-filter>
+    </receiver>
+
     <!-- Lets Android Auto show the app as a media source. -->
     <meta-data
       android:name="com.google.android.gms.car.application"

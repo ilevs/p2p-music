@@ -7,6 +7,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import io.github.ilevs.p2pmusic.LastPlayed
 import io.github.ilevs.p2pmusic.SettingsStore
+import io.github.ilevs.p2pmusic.catalog.albumFiles
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.engine.TorrentRef
 import io.github.ilevs.p2pmusic.engine.isAudioFile
@@ -87,16 +88,27 @@ class StreamController(
 
     fun open(magnet: String) = load { engine.openMagnet(magnet) }
 
-    /** Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker. */
-    fun openTorrent(download: () -> ByteArray) = load { engine.openTorrent(download()) }
+    /**
+     * Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker.
+     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it.
+     */
+    fun openTorrent(
+        album: String? = null,
+        download: () -> ByteArray,
+    ) = load(album) { engine.openTorrent(download()) }
 
-    private fun load(open: () -> TorrentHandle) {
+    private fun load(
+        album: String? = null,
+        open: () -> TorrentHandle,
+    ) {
         mutableState.update { StreamState(isLoading = true) }
         scope.launch {
             runCatching { withContext(io) { listAudio(open()) } }
-                .onSuccess { (name, files) ->
+                .onSuccess { (name, all) ->
+                    val files = album?.let { albumFiles(it, all) } ?: all
                     mutableState.update { it.copy(torrentName = name, files = files, isLoading = false) }
                     watchStats()
+                    if (album != null) files.firstOrNull()?.let(::play)
                 }.onFailure { error ->
                     mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
                 }
