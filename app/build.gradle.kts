@@ -88,6 +88,9 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // libtorrent is ~16 MB per ABI uncompressed; compressing it keeps the universal APK small
+        // enough to copy to a head unit from a flash drive.
+        jniLibs.useLegacyPackaging = true
     }
 }
 
@@ -138,6 +141,14 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
+    implementation(libs.libtorrent4j)
+    // Native libtorrent for phones (arm64), older head units (arm) and Intel head units like Haval Jolion (x86).
+    implementation(libs.libtorrent4j.android.arm)
+    implementation(libs.libtorrent4j.android.arm64)
+    implementation(libs.libtorrent4j.android.x86)
+    implementation(libs.libtorrent4j.android.x64)
 
     testImplementation(libs.junit)
 
