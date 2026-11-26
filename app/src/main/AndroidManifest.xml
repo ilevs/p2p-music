@@ -32,6 +32,11 @@
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="magnet" />
       </intent-filter>
+      <!-- "Play <artist>" by voice; the query itself reaches the media session. -->
+      <intent-filter>
+        <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
     </activity>
 
     <!-- Exported so that system UI, Bluetooth and Android Auto controllers can connect to the session. -->

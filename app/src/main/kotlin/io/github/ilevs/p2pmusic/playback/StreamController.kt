@@ -1,9 +1,11 @@
 package io.github.ilevs.p2pmusic.playback
 
 import android.os.SystemClock
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import io.github.ilevs.p2pmusic.LastPlayed
 import io.github.ilevs.p2pmusic.SettingsStore
@@ -166,6 +168,7 @@ class StreamController(
     }
 
     /** Reopens the last played torrent and returns the queue at the saved spot, or null. */
+    @OptIn(UnstableApi::class) // MediaItemsWithStartPosition, the only way to resume at a position
     suspend fun restore(): MediaSession.MediaItemsWithStartPosition? {
         val last = settings.lastPlayed() ?: return null
         val (name, files) = withContext(io) { listAudio(engine.handle(last.hash)) }

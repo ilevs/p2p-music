@@ -1,7 +1,9 @@
 package io.github.ilevs.p2pmusic.playback
 
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
@@ -20,6 +22,7 @@ private const val ROOT_ID = "root"
  * The library tree that Android Auto and other controllers browse: for now the root lists the
  * tracks of the opened torrent. Also restores the last queue when Play is pressed after a restart.
  */
+@OptIn(UnstableApi::class) // MediaItemsWithStartPosition, the only way to resume at a position
 class LibraryCallback(
     private val stream: StreamController,
     private val scope: CoroutineScope,
