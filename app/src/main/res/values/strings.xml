@@ -20,6 +20,8 @@
   <string name="tab_settings">Настройки</string>
   <string name="search_label">Артист, альбом</string>
   <string name="search">Найти</string>
+  <string name="albums">Альбомы</string>
+  <string name="releases">Раздачи</string>
   <string name="result_details">%1$s · %2$.0f МБ · Сиды: %3$d</string>
   <string name="rutracker_section">RuTracker</string>
   <string name="login">Логин</string>

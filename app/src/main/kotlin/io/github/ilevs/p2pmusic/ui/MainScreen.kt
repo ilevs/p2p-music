@@ -57,7 +57,12 @@ fun MainScreen(
         when (tab) {
             Tab.Search -> {
                 SearchScreen(
+                    catalog = graph.catalog,
                     controller = graph.search,
+                    onAlbum = { album ->
+                        graph.catalog.play(album)
+                        tab = Tab.Player
+                    },
                     onOpen = { result ->
                         graph.stream.openTorrent { graph.search.torrentFile(result) }
                         tab = Tab.Player

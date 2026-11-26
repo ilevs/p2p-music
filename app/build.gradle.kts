@@ -190,6 +190,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
+    // org.json ships with Android; unit tests run on a plain JVM.
+    testImplementation(libs.org.json)
     libtorrentDesktop(libs.libtorrent4j.linux)
 
     detektPlugins(libs.detekt.compose.rules)

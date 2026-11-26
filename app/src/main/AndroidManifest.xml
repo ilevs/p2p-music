@@ -32,6 +32,11 @@
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="magnet" />
       </intent-filter>
+      <!-- "Play <artist>" by voice; the query itself reaches the media session. -->
+      <intent-filter>
+        <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
     </activity>
 
     <!-- Exported so that system UI, Bluetooth and Android Auto controllers can connect to the session. -->
@@ -41,9 +46,24 @@
       android:foregroundServiceType="mediaPlayback"
       tools:ignore="ExportedService">
       <intent-filter>
-        <action android:name="androidx.media3.session.MediaSessionService" />
+        <action android:name="androidx.media3.session.MediaLibraryService" />
+        <action android:name="android.media.browse.MediaBrowserService" />
       </intent-filter>
     </service>
+
+    <!-- Media buttons (steering wheel, headset, system "resume") start playback while the app is closed. -->
+    <receiver
+      android:name="androidx.media3.session.MediaButtonReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MEDIA_BUTTON" />
+      </intent-filter>
+    </receiver>
+
+    <!-- Lets Android Auto show the app as a media source. -->
+    <meta-data
+      android:name="com.google.android.gms.car.application"
+      android:resource="@xml/automotive_app_desc" />
   </application>
 
 </manifest>

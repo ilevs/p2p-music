@@ -8,6 +8,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import io.github.ilevs.p2pmusic.catalog.CatalogController
+import io.github.ilevs.p2pmusic.catalog.MusicBrainz
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.TorrentDataSource
@@ -57,21 +59,21 @@ class AppGraph(
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
-    private val scope = MainScope()
-
-    val stream = StreamController(engine, player, scope, io)
+    val scope = MainScope()
 
     val settings = SettingsStore(context)
+
+    val stream = StreamController(engine, settings, player, scope, io)
 
     private val cookies = MemoryCookieJar()
     private var trackerClient: Pair<ProxySettings?, OkHttpClient>? = null
 
-    val search =
-        SearchController(
-            RuTracker(client = ::trackerClient, credentials = { settings.load().credentials() }),
-            scope,
-            io,
-        )
+    private val tracker = RuTracker(client = ::trackerClient, credentials = { settings.load().credentials() })
+
+    val search = SearchController(tracker, scope, io)
+
+    // The catalog is not blocked anywhere, so it goes direct, without the tracker proxy.
+    val catalog = CatalogController(MusicBrainz(OkHttpClient()), tracker, stream, scope, io)
 
     // One client per proxy setting, so a changed proxy applies to the next request.
     @Synchronized
