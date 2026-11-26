@@ -82,7 +82,6 @@ android {
                 "AndroidGradlePluginVersion",
             )
         textReport = true
-        textOutput = file("stdout")
         sarifReport = true
         htmlReport = true
     }

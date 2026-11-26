@@ -39,6 +39,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: ./gradlew lintDebug lintRelease --continue
 
+      - name: Print lint issues
+        if: ${{ failure() }}
+        run: cat app/build/reports/lint-results-*.txt 2>/dev/null || true
+
       - name: Unit tests
         if: ${{ !cancelled() }}
         run: ./gradlew testDebugUnitTest --stacktrace
