@@ -19,10 +19,6 @@ comments:
   UndocumentedPublicProperty:
     active: false
 
-formatting:
-  # ktlint runs as its own Gradle task; avoid reporting every issue twice.
-  active: false
-
 naming:
   FunctionNaming:
     ignoreAnnotated: ['Composable']

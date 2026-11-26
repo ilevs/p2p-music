@@ -20,12 +20,12 @@ val hasReleaseKeystore = !releaseKeystorePath.isNullOrBlank() && file(releaseKey
 
 android {
     namespace = "io.github.ilevs.p2pmusic"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.github.ilevs.p2pmusic"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
     }
@@ -81,6 +81,8 @@ android {
                 "GradleDependency",
                 "AndroidGradlePluginVersion",
             )
+        textReport = true
+        textOutput = file("stdout")
         sarifReport = true
         htmlReport = true
     }
