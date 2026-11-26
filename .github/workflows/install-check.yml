@@ -52,14 +52,20 @@ jobs:
 
   # Built once and shared: parallel Gradle builds get rate-limited by Maven Central.
   install:
-    name: Install and launch (API ${{ matrix.api }})
+    name: Install and launch (API ${{ matrix.api }} ${{ matrix.target }})
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        api: [27, 35, 36, 37]
+        include:
+          - { api: '27', target: default }  # Android 8.1 head units such as Haval Jolion
+          - { api: '35', target: google_apis }
+          - { api: '36', target: google_apis }
+          - { api: '37.0', target: google_apis }
+          # Android 17 on Pixel phones runs with 16 KB memory pages.
+          - { api: '37.1', target: google_apis_ps16k }
     steps:
       - uses: actions/checkout@v4
 
@@ -88,6 +94,6 @@ jobs:
         with:
           api-level: ${{ matrix.api }}
           arch: x86_64
-          target: ${{ matrix.api == 27 && 'default' || 'google_apis' }}
+          target: ${{ matrix.target }}
           disable-animations: true
           script: bash .github/scripts/install-check.sh app-release.apk published.apk
