@@ -7,7 +7,7 @@ Android-приложение для стриминга музыки с опыт�
 
 - Kotlin 2.0, Jetpack Compose, Material 3
 - Gradle Kotlin DSL + version catalog (`gradle/libs.versions.toml`)
-- minSdk 26, targetSdk 35, JDK 17
+- minSdk 26, targetSdk 36, JDK 17
 
 ## Проверки
 
