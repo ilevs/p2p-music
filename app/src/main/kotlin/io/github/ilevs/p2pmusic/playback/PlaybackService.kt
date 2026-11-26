@@ -17,7 +17,7 @@ class PlaybackService : MediaLibraryService() {
         val graph = (application as P2pMusicApp).graph
         session =
             MediaLibrarySession
-                .Builder(this, graph.player, LibraryCallback(graph.stream, graph.scope))
+                .Builder(this, graph.player, LibraryCallback(graph.stream, graph.settings, graph.scope))
                 .build()
                 .also(::addSession)
     }
