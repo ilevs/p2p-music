@@ -71,7 +71,7 @@ class RuTracker(
     fun login() {
         val account = credentials() ?: throw TrackerLoginException("Укажите логин и пароль RuTracker в настройках")
         val form =
-            listOf("login_username" to account.login, "login_password" to account.password, "login" to "вход")
+            listOf("login_username" to account.login, "login_password" to account.password, "login" to "Вход")
                 .joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, Cp1251.name())}" }
         val request =
             Request
@@ -79,12 +79,18 @@ class RuTracker(
                 .url(baseUrl.newBuilder().addPathSegment("login.php").build())
                 .post(form.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
                 .build()
-        val page = client().newCall(request).execute().use { String(checkNotNull(it.body).bytes(), Cp1251) }
+        val (code, page) =
+            client().newCall(request).execute().use { it.code to String(checkNotNull(it.body).bytes(), Cp1251) }
+        val html = Jsoup.parse(page)
+        val siteError = html.selectFirst("h4.warnColor1")?.text()
+        // The last branch: a blocked-site stub from the provider or the proxy, or an anti-bot page.
         val error =
             when {
                 LOGGED_IN_MARKER in page -> null
                 CAPTCHA_MARKER in page -> "RuTracker просит капчу: войдите один раз через браузер"
-                else -> "RuTracker не принял логин или пароль"
+                !siteError.isNullOrBlank() -> "RuTracker: $siteError"
+                "login_username" in page -> "RuTracker не принял логин или пароль"
+                else -> "Вместо RuTracker пришла страница «${html.title()}» (HTTP $code). Проверьте прокси"
             }
         if (error != null) throw TrackerLoginException(error)
     }

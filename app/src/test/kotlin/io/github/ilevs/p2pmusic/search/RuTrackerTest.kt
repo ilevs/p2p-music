@@ -60,6 +60,19 @@ class RuTrackerTest {
     }
 
     @Test
+    fun reportsTheSiteErrorText() {
+        server.enqueue(page("<h4 class=\"warnColor1 tCenter\">неверный пароль</h4><input name=\"login_username\">"))
+        assertEquals("RuTracker: неверный пароль", runCatching { tracker.login() }.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun tellsAForeignPageFromABadPassword() {
+        server.enqueue(page("<title>Доступ ограничен</title>").setResponseCode(403))
+        val message = runCatching { tracker.login() }.exceptionOrNull()?.message.orEmpty()
+        assertTrue(message, message.contains("«Доступ ограничен» (HTTP 403)"))
+    }
+
+    @Test
     fun downloadsTorrentFile() {
         server.enqueue(MockResponse().setBody("d8:announce0:e"))
         val bytes = tracker.torrentFile(SearchResult("42", "", "", 0, 0, 0))

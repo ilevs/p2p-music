@@ -38,9 +38,10 @@ class TorrentReaderTest {
     @Before
     fun setUp() {
         val seedDir = temp.newFolder("seed")
-        val album = File(seedDir, "album").apply { mkdirs() }
-        File(album, "01 track.flac").writeBytes(track)
-        File(album, "scans.bin").writeBytes(cover)
+        // Shaped like a typical discography: album folders, Cyrillic names.
+        val album = File(seedDir, "Исполнитель - Дискография").apply { mkdirs() }
+        File(album, "2001 - Первый альбом").apply { mkdirs() }.resolve(TRACK_NAME).writeBytes(track)
+        File(album, "Сканы").apply { mkdirs() }.resolve("scans.bin").writeBytes(cover)
         val torrentBytes =
             TorrentBuilder()
                 .path(album)
@@ -100,7 +101,7 @@ class TorrentReaderTest {
         (firstCoverPiece..lastCoverPiece).forEach { assertFalse("piece $it", handle.havePiece(it)) }
     }
 
-    private fun trackIndex(): Int = fileIndex("01 track.flac")
+    private fun trackIndex(): Int = fileIndex(TRACK_NAME)
 
     private fun fileIndex(name: String): Int = (0 until info.numFiles()).first { info.files().fileName(it) == name }
 
@@ -126,6 +127,7 @@ class TorrentReaderTest {
 
     private companion object {
         const val LOCALHOST = "127.0.0.1"
+        const val TRACK_NAME = "01 Песня.mp3"
         const val PIECE_SIZE = 32 * 1024
         const val TRACK_SIZE = 1_000_000
         const val COVER_SIZE = 700_000
