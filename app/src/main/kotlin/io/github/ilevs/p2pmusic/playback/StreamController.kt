@@ -53,7 +53,7 @@ data class StreamState(
  * and measure how long playback takes to start and to recover after a seek.
  */
 class StreamController(
-    private val engine: TorrentEngine,
+    val engine: TorrentEngine,
     private val settings: SettingsStore,
     val player: Player,
     private val scope: CoroutineScope,
@@ -88,7 +88,7 @@ class StreamController(
         }
     }
 
-    fun open(magnet: String) = load { engine.openMagnet(magnet) }
+    fun open(magnet: String) = openHandle { engine.openMagnet(magnet) }
 
     /**
      * Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker.
@@ -97,9 +97,10 @@ class StreamController(
     fun openTorrent(
         album: String? = null,
         download: () -> ByteArray,
-    ) = load(album) { engine.openTorrent(download()) }
+    ) = openHandle(album) { engine.openTorrent(download()) }
 
-    private fun load(
+    /** Opens the torrent that [open] returns off the main thread; [album] as in [openTorrent]. */
+    fun openHandle(
         album: String? = null,
         open: () -> TorrentHandle,
     ) {

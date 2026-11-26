@@ -96,8 +96,10 @@ fun SearchScreen(
         }
         if (isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         message?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
+        val showLibrary = showAlbums && catalogState.albums.isEmpty() && catalogState.library.isNotEmpty()
+        if (showLibrary) Text(text = stringResource(R.string.library), style = MaterialTheme.typography.titleMedium)
         SearchResults(
-            albums = if (showAlbums) catalogState.albums else null,
+            albums = if (showAlbums) catalogState.albums.ifEmpty { catalogState.library } else null,
             results = state.results,
             onAlbum = onAlbum,
             onOpen = onOpen,
