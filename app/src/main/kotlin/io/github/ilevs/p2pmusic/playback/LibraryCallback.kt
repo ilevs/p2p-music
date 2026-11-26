@@ -1,7 +1,7 @@
 package io.github.ilevs.p2pmusic.playback
 
-import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
@@ -135,7 +135,7 @@ class LibraryCallback(
                     .Builder()
                     .setTitle(saved.album.title)
                     .setArtist(saved.album.artist)
-                    .setArtworkUri(Uri.parse(saved.album.coverUrl))
+                    .setArtworkUri(saved.album.coverUrl.toUri())
                     .setIsBrowsable(false)
                     .setIsPlayable(true)
                     .build(),
