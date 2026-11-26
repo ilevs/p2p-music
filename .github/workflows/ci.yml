@@ -37,7 +37,7 @@ jobs:
 
       - name: Android Lint
         if: ${{ !cancelled() }}
-        run: ./gradlew lintDebug lintRelease --stacktrace
+        run: ./gradlew lintDebug lintRelease --continue
 
       - name: Unit tests
         if: ${{ !cancelled() }}
