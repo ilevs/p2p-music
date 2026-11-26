@@ -7,6 +7,8 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.libtorrent4j.TorrentInfo
+import kotlin.concurrent.thread
 
 /**
  * The whole path on a real public swarm: .torrent, list audio, read the start of a track as a
@@ -21,13 +23,30 @@ class LiveStreamTest {
         assumeTrue("LIVE_TESTS is not set", System.getenv("LIVE_TESTS") == "true")
         val request = Request.Builder().url("https://archive.org/download/$ITEM/${ITEM}_archive.torrent").build()
         val bytes = OkHttpClient().newCall(request).execute().use { checkNotNull(it.body).bytes() }
-        println(checkStreams(TorrentEngine(temp.newFolder()), bytes))
+        val engine = TorrentEngine(temp.newFolder())
+        val info = TorrentInfo.bdecode(bytes)
+        // Swarm state in the CI log, so a timeout says whether peers or web seeds never came.
+        thread(isDaemon = true) {
+            while (true) {
+                engine.find(info.infoHash().toHex())?.let { handle ->
+                    val status = handle.status()
+                    println(
+                        "${status.state()} peers=${status.numPeers()} seeds=${status.numSeeds()} " +
+                            "rate=${status.downloadRate()} trackers=${handle.trackers().map { it.url() }} " +
+                            "web seeds=${handle.urlSeeds()}",
+                    )
+                }
+                Thread.sleep(STATUS_INTERVAL_MS)
+            }
+        }
+        println(checkStreams(engine, bytes))
     }
 
     private companion object {
         // A public domain recording on archive.org; its torrents are seeded by archive.org itself.
         const val ITEM = "testmp3testfile"
         const val TIMEOUT_MS = 180_000L
+        const val STATUS_INTERVAL_MS = 5_000L
     }
 }
 

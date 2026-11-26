@@ -145,6 +145,8 @@ val extractLibtorrentJni =
 
 tasks.withType<Test>().configureEach {
     dependsOn(extractLibtorrentJni)
+    // LiveStreamTest prints swarm state and timings for the CI log.
+    testLogging.showStandardStreams = true
     systemProperty(
         "libtorrent4j.jni.path",
         libtorrentJniDir
