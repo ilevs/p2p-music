@@ -45,10 +45,17 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
+      - name: Check that native libraries are stored and 16 KB aligned
+        run: |
+          zipalign=$(ls "$ANDROID_HOME"/build-tools/*/zipalign | tail -1)
+          for apk in app/build/outputs/apk/release/*.apk; do
+            "$zipalign" -c -P 16 4 "$apk" && echo "aligned: $apk"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/app-universal-release.apk
 
   # Built once and shared: parallel Gradle builds get rate-limited by Maven Central.
   install:
@@ -76,7 +83,7 @@ jobs:
       - name: Download the latest published APK for comparison
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --output published.apk || true
+        run: gh release download --repo "$GITHUB_REPOSITORY" --pattern 'p2p-music-*[0-9].apk' --output published.apk || true
 
       - name: List system images for this API level
         run: |
@@ -96,4 +103,4 @@ jobs:
           arch: x86_64
           target: ${{ matrix.target }}
           disable-animations: true
-          script: bash .github/scripts/install-check.sh app-release.apk published.apk
+          script: bash .github/scripts/install-check.sh app-universal-release.apk published.apk

@@ -86,11 +86,20 @@ android {
         htmlReport = true
     }
 
+    // libtorrent is ~16 MB per ABI and stays uncompressed and page-aligned in the APK, the platform
+    // default: v0.1.4 with compressed libs did not install on a Pixel 9 with Android 17 while v0.1.2
+    // without them did. Per-ABI APKs keep the download small.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        // libtorrent is ~16 MB per ABI uncompressed; compressing it keeps the universal APK small
-        // enough to copy to a head unit from a flash drive.
-        jniLibs.useLegacyPackaging = true
     }
 }
 
