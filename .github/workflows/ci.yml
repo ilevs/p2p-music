@@ -49,8 +49,9 @@ jobs:
           # Optional: RuTrackerLiveTest runs against the real site only when these secrets exist.
           RUTRACKER_LOGIN: ${{ secrets.RUTRACKER_LOGIN }}
           RUTRACKER_PASSWORD: ${{ secrets.RUTRACKER_PASSWORD }}
-          # LiveStreamTest streams a public torrent from the real swarm.
-          LIVE_TESTS: true
+          # LiveStreamTest streams a public torrent from the real swarm. PRs only: the swarm sometimes
+          # gives a runner no peers for minutes, and that must not block the release of merged code.
+          LIVE_TESTS: ${{ github.event_name == 'pull_request' }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Assemble debug APK
