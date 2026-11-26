@@ -32,6 +32,13 @@ fun UserSettings.proxy(): ProxySettings? {
 
 private const val MAX_PORT = 65_535
 
+/** Where playback was when the app last saved it. */
+data class LastPlayed(
+    val hash: String,
+    val fileIndex: Int,
+    val positionMs: Long,
+)
+
 class SettingsStore(
     context: Context,
 ) {
@@ -58,6 +65,19 @@ class SettingsStore(
         }
     }
 
+    fun lastPlayed(): LastPlayed? {
+        val hash = prefs.getString(LAST_HASH, null) ?: return null
+        return LastPlayed(hash, prefs.getInt(LAST_FILE, 0), prefs.getLong(LAST_POSITION, 0L))
+    }
+
+    fun saveLastPlayed(last: LastPlayed) {
+        prefs.edit {
+            putString(LAST_HASH, last.hash)
+            putInt(LAST_FILE, last.fileIndex)
+            putLong(LAST_POSITION, last.positionMs)
+        }
+    }
+
     private companion object {
         const val RUTRACKER_LOGIN = "rutracker_login"
         const val RUTRACKER_PASSWORD = "rutracker_password"
@@ -65,5 +85,8 @@ class SettingsStore(
         const val PROXY_PORT = "proxy_port"
         const val PROXY_USER = "proxy_user"
         const val PROXY_PASSWORD = "proxy_password"
+        const val LAST_HASH = "last_hash"
+        const val LAST_FILE = "last_file"
+        const val LAST_POSITION = "last_position"
     }
 }

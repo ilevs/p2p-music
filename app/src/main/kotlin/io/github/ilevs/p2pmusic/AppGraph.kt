@@ -57,11 +57,11 @@ class AppGraph(
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
-    private val scope = MainScope()
-
-    val stream = StreamController(engine, player, scope, io)
+    val scope = MainScope()
 
     val settings = SettingsStore(context)
+
+    val stream = StreamController(engine, settings, player, scope, io)
 
     private val cookies = MemoryCookieJar()
     private var trackerClient: Pair<ProxySettings?, OkHttpClient>? = null
