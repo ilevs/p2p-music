@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.libtorrent4j.TorrentHandle
 
 private const val STATS_INTERVAL_MS = 1_000L
 
@@ -68,10 +69,15 @@ class StreamController(
         )
     }
 
-    fun open(magnet: String) {
+    fun open(magnet: String) = load { engine.openMagnet(magnet) }
+
+    /** Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker. */
+    fun openTorrent(download: () -> ByteArray) = load { engine.openTorrent(download()) }
+
+    private fun load(open: () -> TorrentHandle) {
         mutableState.update { StreamState(isLoading = true) }
         scope.launch {
-            runCatching { withContext(io) { listAudio(magnet) } }
+            runCatching { withContext(io) { listAudio(open()) } }
                 .onSuccess { (name, files) ->
                     mutableState.update { it.copy(torrentName = name, files = files, isLoading = false) }
                     watchStats()
@@ -117,8 +123,7 @@ class StreamController(
         startClock = 0L
     }
 
-    private fun listAudio(magnet: String): Pair<String, List<AudioFile>> {
-        val handle = engine.openMagnet(magnet)
+    private fun listAudio(handle: TorrentHandle): Pair<String, List<AudioFile>> {
         hash = handle.infoHash().toHex()
         val info = handle.torrentFile()
         val storage = info.files()

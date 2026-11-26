@@ -13,7 +13,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,46 +49,44 @@ fun StreamScreen(
 ) {
     val state by controller.state.collectAsState()
     var magnet by rememberSaveable { mutableStateOf("") }
-    Scaffold(modifier = modifier.fillMaxSize()) { padding ->
-        Column(
-            modifier = Modifier.padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = magnet,
-                    onValueChange = { magnet = it },
-                    label = { Text(stringResource(R.string.magnet_label)) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                )
-                Button(
-                    onClick = { controller.open(magnet.trim()) },
-                    enabled = magnet.isNotBlank() && !state.isLoading,
-                    modifier = Modifier.padding(start = 8.dp),
-                ) { Text(stringResource(R.string.open)) }
-            }
-            StatusText(state)
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(state.files, key = { it.index }) { file ->
-                    Text(
-                        text = file.name,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    controller.play(
-                                        file,
-                                    )
-                                }.padding(vertical = 12.dp),
-                    )
-                }
-            }
-            PlayerPanel(controller)
-            Text(text = statsText(state), style = MaterialTheme.typography.bodySmall)
+    Column(
+        modifier = modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = magnet,
+                onValueChange = { magnet = it },
+                label = { Text(stringResource(R.string.magnet_label)) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = { controller.open(magnet.trim()) },
+                enabled = magnet.isNotBlank() && !state.isLoading,
+                modifier = Modifier.padding(start = 8.dp),
+            ) { Text(stringResource(R.string.open)) }
         }
+        StatusText(state)
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(state.files, key = { it.index }) { file ->
+                Text(
+                    text = file.name,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                controller.play(
+                                    file,
+                                )
+                            }.padding(vertical = 12.dp),
+                )
+            }
+        }
+        PlayerPanel(controller)
+        Text(text = statsText(state), style = MaterialTheme.typography.bodySmall)
     }
 }
 

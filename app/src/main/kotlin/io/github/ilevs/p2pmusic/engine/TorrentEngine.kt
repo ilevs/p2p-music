@@ -12,7 +12,9 @@ import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.Vectors
 import org.libtorrent4j.alerts.Alert
 import org.libtorrent4j.alerts.AlertType
+import org.libtorrent4j.swig.error_code
 import org.libtorrent4j.swig.libtorrent
+import org.libtorrent4j.swig.load_torrent_limits
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
@@ -36,13 +38,16 @@ class TorrentEngine(
     private val torrentsDir = File(dataDir, "torrents")
     private val downloadsDir = File(dataDir, "downloads")
 
+    init {
+        torrentsDir.mkdirs()
+        downloadsDir.mkdirs()
+    }
+
     // Signalled on every alert we listen to; waiters re-check their condition after it.
     private val lock = ReentrantLock()
     private val changed = lock.newCondition()
 
     private val session: SessionManager by lazy {
-        torrentsDir.mkdirs()
-        downloadsDir.mkdirs()
         SessionManager().apply {
             addListener(
                 object : AlertListener {
@@ -81,6 +86,20 @@ class TorrentEngine(
         return handle
     }
 
+    /** Adds a .torrent file (or finds it in the session) and caches it. */
+    fun openTorrent(bytes: ByteArray): TorrentHandle {
+        val info =
+            try {
+                TorrentInfo.bdecode(bytes)
+            } catch (e: IllegalArgumentException) {
+                throw IOException("Not a .torrent file", e)
+            }
+        val hash = info.infoHash().toHex()
+        File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(bytes)
+        if (find(hash) == null && !addCached(hash)) throw IOException("Could not add torrent $hash")
+        return awaitMetadata(hash)
+    }
+
     /** A torrent that was opened before, from the session or from the .torrent cache. */
     fun handle(hash: String): TorrentHandle {
         if (find(hash) == null && !addCached(hash)) throw IOException("Unknown torrent $hash")
@@ -97,12 +116,17 @@ class TorrentEngine(
         awaitUntil(Long.MAX_VALUE) { handle.havePiece(piece) }
     }
 
+    // Loads the whole .torrent, not just its info dictionary, so the torrent keeps its trackers.
     private fun addCached(hash: String): Boolean {
         val file = File(torrentsDir, "$hash.torrent")
-        if (file.exists()) {
-            session.download(TorrentInfo(file), downloadsDir, null, null, null, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
-        }
-        return file.exists()
+        if (!file.exists()) return false
+        val error = error_code()
+        val params = libtorrent.load_torrent_file(file.absolutePath, error, load_torrent_limits())
+        if (error.value() != 0) throw IOException("Broken cached torrent $hash: ${error.message()}")
+        params.setSave_path(downloadsDir.absolutePath)
+        params.setFlags(params.getFlags().or_(TorrentFlags.DEFAULT_DONT_DOWNLOAD))
+        session.swig().async_add_torrent(params)
+        return true
     }
 
     private fun awaitMetadata(hash: String): TorrentHandle {

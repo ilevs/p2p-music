@@ -15,4 +15,19 @@
   <string name="seconds">%1$.1f с</string>
   <string name="not_measured">—</string>
   <string name="speed">%1$.1f МБ/с</string>
+  <string name="tab_search">Поиск</string>
+  <string name="tab_player">Плеер</string>
+  <string name="tab_settings">Настройки</string>
+  <string name="search_label">Артист, альбом</string>
+  <string name="search">Найти</string>
+  <string name="result_details">%1$s · %2$.0f МБ · Сиды: %3$d</string>
+  <string name="rutracker_section">RuTracker</string>
+  <string name="login">Логин</string>
+  <string name="password">Пароль</string>
+  <string name="proxy_section">SOCKS5-прокси</string>
+  <string name="proxy_hint">Только для запросов к трекеру. Музыка качается напрямую, чтобы не терять скорость.</string>
+  <string name="proxy_host">Адрес</string>
+  <string name="proxy_port">Порт</string>
+  <string name="save">Сохранить</string>
+  <string name="check_login">Проверить вход</string>
 </resources>

@@ -164,10 +164,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons)
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.libtorrent4j)
+    implementation(libs.okhttp)
+    implementation(libs.jsoup)
     // Native libtorrent for phones (arm64), older head units (arm) and Intel head units like Haval Jolion (x86).
     implementation(libs.libtorrent4j.android.arm)
     implementation(libs.libtorrent4j.android.arm64)
@@ -175,6 +178,7 @@ dependencies {
     implementation(libs.libtorrent4j.android.x64)
 
     testImplementation(libs.junit)
+    testImplementation(libs.okhttp.mockwebserver)
     libtorrentDesktop(libs.libtorrent4j.linux)
 
     detektPlugins(libs.detekt.compose.rules)
