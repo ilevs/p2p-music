@@ -50,6 +50,23 @@ data class LastPlayed(
     val positionMs: Long,
 )
 
+/** One saved album as JSON: the form kept in settings and written to the export file. */
+internal fun SavedAlbum.toJson(): JSONObject =
+    JSONObject()
+        .put("id", album.id)
+        .put("title", album.title)
+        .put("artist", album.artist)
+        .put("year", album.year)
+        .put("hash", hash)
+
+internal fun JSONObject.toSavedAlbum(): SavedAlbum =
+    SavedAlbum(Album(getString("id"), getString("title"), getString("artist"), getString("year")), getString("hash"))
+
+internal fun parseLibrary(json: String): List<SavedAlbum> {
+    val array = JSONArray(json)
+    return (0 until array.length()).map { array.getJSONObject(it).toSavedAlbum() }
+}
+
 class SettingsStore(
     context: Context,
 ) {
@@ -92,31 +109,11 @@ class SettingsStore(
     }
 
     /** Played albums, newest first. */
-    fun library(): List<SavedAlbum> {
-        val array = JSONArray(prefs.getString(LIBRARY, "[]"))
-        return (0 until array.length()).map { i ->
-            val item = array.getJSONObject(i)
-            SavedAlbum(
-                Album(item.getString("id"), item.getString("title"), item.getString("artist"), item.getString("year")),
-                item.getString("hash"),
-            )
-        }
-    }
+    fun library(): List<SavedAlbum> = parseLibrary(prefs.getString(LIBRARY, "[]").orEmpty())
 
     fun addToLibrary(saved: SavedAlbum) {
         val library = (listOf(saved) + library().filterNot { it.album.id == saved.album.id }).take(LIBRARY_SIZE)
-        val array =
-            JSONArray(
-                library.map {
-                    JSONObject()
-                        .put("id", it.album.id)
-                        .put("title", it.album.title)
-                        .put("artist", it.album.artist)
-                        .put("year", it.album.year)
-                        .put("hash", it.hash)
-                },
-            )
-        prefs.edit { putString(LIBRARY, array.toString()) }
+        prefs.edit { putString(LIBRARY, JSONArray(library.map { it.toJson() }).toString()) }
     }
 
     private companion object {

@@ -38,7 +38,8 @@ class TorrentEngine(
     dataDir: File,
     private val settings: SettingsPack = SettingsPack(),
 ) {
-    private val torrentsDir = File(dataDir, "torrents")
+    /** Cached .torrent files, `<infohash>.torrent`. */
+    val torrentsDir = File(dataDir, "torrents")
     private val downloadsDir = File(dataDir, "downloads")
 
     init {

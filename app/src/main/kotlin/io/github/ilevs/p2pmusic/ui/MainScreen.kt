@@ -114,6 +114,7 @@ private fun TabContent(
             SettingsScreen(
                 store = graph.settings,
                 search = graph.search,
+                catalog = graph.catalog,
                 onSave = { graph.engine.setSeeding(it.seeding) },
                 modifier = modifier,
             )

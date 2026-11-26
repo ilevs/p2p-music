@@ -32,12 +32,14 @@ import androidx.compose.ui.unit.dp
 import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.UserSettings
+import io.github.ilevs.p2pmusic.catalog.CatalogController
 import io.github.ilevs.p2pmusic.search.SearchController
 
 @Composable
 fun SettingsScreen(
     store: SettingsStore,
     search: SearchController,
+    catalog: CatalogController,
     onSave: (UserSettings) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -91,6 +93,7 @@ fun SettingsScreen(
             ) { Text(stringResource(R.string.check_login)) }
         }
         state.message?.let { Text(it) }
+        LibrarySync(catalog)
     }
 }
 

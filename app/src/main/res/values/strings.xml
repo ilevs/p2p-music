@@ -23,6 +23,8 @@
   <string name="albums">Альбомы</string>
   <string name="releases">Раздачи</string>
   <string name="library">Мои альбомы</string>
+  <string name="export_library">Сохранить в файл</string>
+  <string name="import_library">Загрузить из файла</string>
   <string name="result_details">%1$s · %2$.0f МБ · Сиды: %3$d</string>
   <string name="rutracker_section">RuTracker</string>
   <string name="login">Логин</string>
