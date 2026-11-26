@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import io.github.ilevs.p2pmusic.LastPlayed
+import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.catalog.albumFiles
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
@@ -53,7 +54,7 @@ data class StreamState(
  * and measure how long playback takes to start and to recover after a seek.
  */
 class StreamController(
-    private val engine: TorrentEngine,
+    val engine: TorrentEngine,
     private val settings: SettingsStore,
     val player: Player,
     private val scope: CoroutineScope,
@@ -88,7 +89,7 @@ class StreamController(
         }
     }
 
-    fun open(magnet: String) = load { engine.openMagnet(magnet) }
+    fun open(magnet: String) = openHandle { engine.openMagnet(magnet) }
 
     /**
      * Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker.
@@ -97,9 +98,10 @@ class StreamController(
     fun openTorrent(
         album: String? = null,
         download: () -> ByteArray,
-    ) = load(album) { engine.openTorrent(download()) }
+    ) = openHandle(album) { engine.openTorrent(download()) }
 
-    private fun load(
+    /** Opens the torrent that [open] returns off the main thread; [album] as in [openTorrent]. */
+    fun openHandle(
         album: String? = null,
         open: () -> TorrentHandle,
     ) {
@@ -167,15 +169,25 @@ class StreamController(
         startClock = 0L
     }
 
-    /** Reopens the last played torrent and returns the queue at the saved spot, or null. */
+    /**
+     * Reopens [saved] from its first track, or else the last played torrent at the saved spot.
+     * Returns the queue for the session, or null when there is nothing to play.
+     */
     @OptIn(UnstableApi::class) // MediaItemsWithStartPosition, the only way to resume at a position
-    suspend fun restore(): MediaSession.MediaItemsWithStartPosition? {
-        val last = settings.lastPlayed() ?: return null
-        val (name, files) = withContext(io) { listAudio(engine.handle(last.hash)) }
+    suspend fun restore(saved: SavedAlbum? = null): MediaSession.MediaItemsWithStartPosition? {
+        val spot = saved?.let { LastPlayed(it.hash, -1, 0L) } ?: settings.lastPlayed() ?: return null
+        val (name, all) = withContext(io) { listAudio(engine.handle(spot.hash)) }
+        val files = saved?.let { albumFiles(it.album.title, all) } ?: all
         mutableState.update { StreamState(torrentName = name, files = files) }
         watchStats()
-        val index = files.indexOfFirst { it.index == last.fileIndex }
-        return if (index < 0) null else MediaSession.MediaItemsWithStartPosition(queueItems(), index, last.positionMs)
+        val index = if (saved != null) 0 else files.indexOfFirst { it.index == spot.fileIndex }
+        return if (index !in
+            files.indices
+        ) {
+            null
+        } else {
+            MediaSession.MediaItemsWithStartPosition(queueItems(), index, spot.positionMs)
+        }
     }
 
     private fun listAudio(handle: TorrentHandle): Pair<String, List<AudioFile>> {

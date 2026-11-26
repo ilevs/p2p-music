@@ -73,7 +73,7 @@ class AppGraph(
     val search = SearchController(tracker, scope, io)
 
     // The catalog is not blocked anywhere, so it goes direct, without the tracker proxy.
-    val catalog = CatalogController(MusicBrainz(OkHttpClient()), tracker, stream, scope, io)
+    val catalog = CatalogController(MusicBrainz(OkHttpClient()), tracker, stream, settings, scope, io)
 
     // One client per proxy setting, so a changed proxy applies to the next request.
     @Synchronized
