@@ -1,0 +1,28 @@
+package io.github.ilevs.p2pmusic
+
+import io.github.ilevs.p2pmusic.catalog.Album
+import org.json.JSONArray
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class LibraryJsonTest {
+    @Test
+    fun savedAlbumsSurviveTheRoundTrip() {
+        val albums =
+            listOf(
+                SavedAlbum(Album("1", "Группа крови", "Кино", "1988"), "a".repeat(HASH_LENGTH)),
+                SavedAlbum(Album("2", "Untitled", "", ""), "b".repeat(HASH_LENGTH)),
+            )
+        assertEquals(albums, parseLibrary(JSONArray(albums.map { it.toJson() }).toString()))
+    }
+
+    @Test
+    fun exportEntriesKeepExtraFields() {
+        val saved = SavedAlbum(Album("1", "A", "B", "2000"), "c".repeat(HASH_LENGTH))
+        assertEquals(saved, saved.toJson().put("torrent", "ZDE6YWU=").toSavedAlbum())
+    }
+
+    private companion object {
+        const val HASH_LENGTH = 40
+    }
+}
