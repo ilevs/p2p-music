@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -21,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -29,15 +31,21 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.SettingsStore
+import io.github.ilevs.p2pmusic.UserSettings
 import io.github.ilevs.p2pmusic.search.SearchController
 
 @Composable
 fun SettingsScreen(
     store: SettingsStore,
     search: SearchController,
+    onSave: (UserSettings) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var settings by remember { mutableStateOf(store.load()) }
+    val save = {
+        store.save(settings)
+        onSave(settings)
+    }
     val state by search.state.collectAsState()
     Column(
         modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -65,11 +73,18 @@ fun SettingsScreen(
             settings =
                 settings.copy(proxyPassword = it)
         })
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.seeding), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.seeding_hint), style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = settings.seeding, onCheckedChange = { settings = settings.copy(seeding = it) })
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { store.save(settings) }) { Text(stringResource(R.string.save)) }
+            Button(onClick = save) { Text(stringResource(R.string.save)) }
             FilledTonalButton(
                 onClick = {
-                    store.save(settings)
+                    save()
                     search.checkLogin()
                 },
                 enabled = !state.isLoading,

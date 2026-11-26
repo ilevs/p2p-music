@@ -31,6 +31,8 @@
   <string name="proxy_hint">Только для запросов к трекеру. Музыка качается напрямую, чтобы не терять скорость.</string>
   <string name="proxy_host">Адрес</string>
   <string name="proxy_port">Порт</string>
+  <string name="seeding">Раздавать скачанное</string>
+  <string name="seeding_hint">Другие слушатели качают у вас, и раздачи живут дольше. Выключите, если трафик дорогой.</string>
   <string name="save">Сохранить</string>
   <string name="check_login">Проверить вход</string>
 </resources>

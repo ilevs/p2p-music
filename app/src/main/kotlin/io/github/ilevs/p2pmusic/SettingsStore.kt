@@ -16,6 +16,7 @@ data class UserSettings(
     val proxyPort: String = "",
     val proxyUser: String = "",
     val proxyPassword: String = "",
+    val seeding: Boolean = true,
 )
 
 fun UserSettings.credentials(): Credentials? =
@@ -62,6 +63,7 @@ class SettingsStore(
             proxyPort = prefs.getString(PROXY_PORT, "").orEmpty(),
             proxyUser = prefs.getString(PROXY_USER, "").orEmpty(),
             proxyPassword = prefs.getString(PROXY_PASSWORD, "").orEmpty(),
+            seeding = prefs.getBoolean(SEEDING, true),
         )
 
     fun save(settings: UserSettings) {
@@ -72,6 +74,7 @@ class SettingsStore(
             putString(PROXY_PORT, settings.proxyPort)
             putString(PROXY_USER, settings.proxyUser)
             putString(PROXY_PASSWORD, settings.proxyPassword)
+            putBoolean(SEEDING, settings.seeding)
         }
     }
 
@@ -127,5 +130,6 @@ class SettingsStore(
         const val LAST_FILE = "last_file"
         const val LAST_POSITION = "last_position"
         const val LIBRARY = "library"
+        const val SEEDING = "seeding"
     }
 }
