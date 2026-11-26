@@ -6,7 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import io.github.ilevs.p2pmusic.playback.PlaybackService
-import io.github.ilevs.p2pmusic.ui.StreamScreen
+import io.github.ilevs.p2pmusic.ui.MainScreen
 import io.github.ilevs.p2pmusic.ui.theme.P2pMusicTheme
 
 class MainActivity : ComponentActivity() {
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) openMagnet(intent)
         setContent {
             P2pMusicTheme {
-                StreamScreen(graph.stream)
+                MainScreen(graph)
             }
         }
     }

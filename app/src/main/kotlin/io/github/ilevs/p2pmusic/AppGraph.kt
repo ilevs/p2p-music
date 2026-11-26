@@ -11,9 +11,15 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.TorrentDataSource
+import io.github.ilevs.p2pmusic.search.MemoryCookieJar
+import io.github.ilevs.p2pmusic.search.ProxySettings
+import io.github.ilevs.p2pmusic.search.RuTracker
+import io.github.ilevs.p2pmusic.search.SearchController
+import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import okhttp3.OkHttpClient
 import java.io.File
 
 // Start playing after half a second of audio; keep up to two minutes decoded ahead,
@@ -51,5 +57,27 @@ class AppGraph(
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
-    val stream = StreamController(engine, player, MainScope(), io)
+    private val scope = MainScope()
+
+    val stream = StreamController(engine, player, scope, io)
+
+    val settings = SettingsStore(context)
+
+    private val cookies = MemoryCookieJar()
+    private var trackerClient: Pair<ProxySettings?, OkHttpClient>? = null
+
+    val search =
+        SearchController(
+            RuTracker(client = ::trackerClient, credentials = { settings.load().credentials() }),
+            scope,
+            io,
+        )
+
+    // One client per proxy setting, so a changed proxy applies to the next request.
+    @Synchronized
+    internal fun trackerClient(): OkHttpClient {
+        val proxy = settings.load().proxy()
+        return trackerClient?.takeIf { it.first == proxy }?.second
+            ?: trackerHttpClient(proxy, cookies).also { trackerClient = proxy to it }
+    }
 }

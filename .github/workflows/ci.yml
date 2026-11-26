@@ -45,6 +45,10 @@ jobs:
 
       - name: Unit tests
         if: ${{ !cancelled() }}
+        env:
+          # Optional: RuTrackerLiveTest runs against the real site only when these secrets exist.
+          RUTRACKER_LOGIN: ${{ secrets.RUTRACKER_LOGIN }}
+          RUTRACKER_PASSWORD: ${{ secrets.RUTRACKER_PASSWORD }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Assemble debug APK

@@ -60,12 +60,9 @@ class TorrentReaderTest {
             Thread.sleep(POLL_MS)
         }
 
-        val engineDir = temp.newFolder("engine")
-        File(engineDir, "torrents").mkdirs()
-        File(engineDir, "torrents/$hash.torrent").writeBytes(torrentBytes)
-        engine = TorrentEngine(engineDir, localSettings())
+        engine = TorrentEngine(temp.newFolder("engine"), localSettings())
         engine
-            .handle(hash)
+            .openTorrent(torrentBytes)
             .swig()
             .connect_peer(TcpEndpoint(LOCALHOST, seeder.swig().listen_port()).swig())
     }
