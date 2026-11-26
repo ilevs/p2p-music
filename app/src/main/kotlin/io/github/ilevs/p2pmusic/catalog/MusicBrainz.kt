@@ -21,6 +21,9 @@ data class Album(
     val year: String,
 )
 
+/** Front cover from the Cover Art Archive, 250 px. */
+val Album.coverUrl: String get() = "https://coverartarchive.org/release-group/$id/front-250"
+
 /** Album search on musicbrainz.org: free, no account. Blocking. */
 class MusicBrainz(
     private val client: OkHttpClient,

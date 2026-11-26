@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.catalog.Album
 import io.github.ilevs.p2pmusic.catalog.CatalogController
+import io.github.ilevs.p2pmusic.catalog.coverUrl
 import io.github.ilevs.p2pmusic.search.SearchController
 import io.github.ilevs.p2pmusic.search.SearchResult
 
@@ -120,6 +122,7 @@ private fun SearchResults(
                     title = album.title,
                     details = listOf(album.artist, album.year).filter(String::isNotEmpty).joinToString(" · "),
                     onClick = { onAlbum(album) },
+                    coverUrl = album.coverUrl,
                 )
                 HorizontalDivider()
             }
@@ -148,14 +151,22 @@ private fun TwoLineRow(
     details: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    coverUrl: String? = null,
 ) {
-    Column(modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
-        Text(text = title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(
-            text = details,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+    Row(
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        coverUrl?.let { Cover(url = it, modifier = Modifier.size(56.dp)) }
+        Column {
+            Text(text = title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = details,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
