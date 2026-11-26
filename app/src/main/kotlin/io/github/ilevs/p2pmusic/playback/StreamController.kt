@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.TorrentHandle
 
 private const val STATS_INTERVAL_MS = 1_000L
@@ -89,7 +90,18 @@ class StreamController(
         }
     }
 
-    fun open(magnet: String) = openHandle { engine.openMagnet(magnet) }
+    fun open(magnet: String) {
+        // Count peers while the metadata is still on its way, so a stuck magnet shows why.
+        hash =
+            runCatching {
+                AddTorrentParams
+                    .parseMagnetUri(magnet)
+                    .infoHashes.best
+                    .toHex()
+            }.getOrNull()
+        watchStats()
+        openHandle { engine.openMagnet(magnet) }
+    }
 
     /**
      * Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker.

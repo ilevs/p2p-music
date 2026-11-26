@@ -7,6 +7,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.libtorrent4j.AnnounceEntry
 import org.libtorrent4j.TorrentInfo
 import kotlin.concurrent.thread
 
@@ -25,14 +26,17 @@ class LiveStreamTest {
     fun streamsFromAPublicSwarm() {
         assumeTrue("LIVE_TESTS is not set", System.getenv("LIVE_TESTS") == "true")
         val client = OkHttpClient()
-        // The point release changes, so take whatever .torrent the release page links to now.
+        // The page lists every point release; older ones get dropped from the tracker, so take the newest.
         val page =
             client
                 .newCall(
                     Request.Builder().url(RELEASE_PAGE).build(),
                 ).execute()
                 .use { checkNotNull(it.body).string() }
-        val name = checkNotNull(Regex("ubuntu-[0-9.]+-live-server-amd64\\.iso\\.torrent").find(page)).value
+        val name =
+            checkNotNull(
+                Regex("ubuntu-[0-9.]+-live-server-amd64\\.iso\\.torrent").findAll(page).map { it.value }.maxOrNull(),
+            )
         val torrent = Request.Builder().url(RELEASE_PAGE + name).build()
         val bytes = client.newCall(torrent).execute().use { checkNotNull(it.body).bytes() }
         val engine = TorrentEngine(temp.newFolder())
@@ -44,7 +48,7 @@ class LiveStreamTest {
                     val status = handle.status()
                     println(
                         "${status.state()} peers=${status.numPeers()} seeds=${status.numSeeds()} " +
-                            "rate=${status.downloadRate()} trackers=${handle.trackers().map { it.url() }} " +
+                            "rate=${status.downloadRate()} trackers=${handle.trackers().map(::trackerState)} " +
                             "web seeds=${handle.urlSeeds()}",
                     )
                 }
@@ -98,3 +102,7 @@ private fun readSome(
     }
 
 private const val READ_BYTES = 64 * 1024
+
+// "url: fails, last message" per endpoint, to tell a refused announce from an empty swarm.
+private fun trackerState(entry: AnnounceEntry): String =
+    entry.url() + entry.endpoints().joinToString { " ${it.infohashV1().fails()} fails, '${it.infohashV1().message()}'" }
