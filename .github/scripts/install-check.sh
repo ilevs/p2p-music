@@ -7,17 +7,22 @@ package=io.github.ilevs.p2pmusic
 
 adb shell getprop ro.build.version.release
 adb shell getprop ro.product.cpu.abilist
+adb shell getconf PAGE_SIZE
 
 if [ -n "$published" ] && [ -f "$published" ]; then
   echo "::group::Published APK"
-  adb install -r "$published" || echo "::warning::The published APK does not install on API $(adb shell getprop ro.build.version.sdk)"
+  adb logcat -c
+  if ! adb install -r "$published"; then
+    adb logcat -d | grep -iE "PackageManager|PackageInstaller|NativeLibrary|NativeHelper" | tail -40
+    echo "::warning::The published APK does not install on API $(adb shell getprop ro.build.version.sdk)"
+  fi
   adb uninstall "$package" > /dev/null 2>&1 || true
   echo "::endgroup::"
 fi
 
 adb logcat -c
 if ! adb install -r "$apk"; then
-  adb logcat -d -s PackageManager PackageInstaller | tail -50
+  adb logcat -d | grep -iE "PackageManager|PackageInstaller|NativeLibrary|NativeHelper" | tail -50
   echo "::error::The APK does not install"
   exit 1
 fi
