@@ -3,6 +3,8 @@ package io.github.ilevs.p2pmusic.engine
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.SessionManager
+import org.libtorrent4j.SessionParams
+import org.libtorrent4j.SettingsPack
 import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
@@ -29,6 +31,7 @@ private const val WAIT_STEP_MS = 500L
  */
 class TorrentEngine(
     dataDir: File,
+    private val settings: SettingsPack = SettingsPack(),
 ) {
     private val torrentsDir = File(dataDir, "torrents")
     private val downloadsDir = File(dataDir, "downloads")
@@ -55,7 +58,7 @@ class TorrentEngine(
                     }
                 },
             )
-            start()
+            start(SessionParams(settings))
         }
     }
 

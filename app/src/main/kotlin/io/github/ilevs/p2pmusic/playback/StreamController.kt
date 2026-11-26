@@ -106,7 +106,8 @@ class StreamController(
         player.seekTo(positionMs)
     }
 
-    private fun onReady() {
+    // Not private: called from the listener object, and lint forbids synthetic accessors.
+    internal fun onReady() {
         val now = SystemClock.elapsedRealtime()
         when {
             seekClock > 0 -> mutableState.update { it.copy(seekMs = now - seekClock) }

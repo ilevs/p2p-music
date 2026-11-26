@@ -121,6 +121,30 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     }
 }
 
+// Unit tests stream real torrents between two libtorrent sessions on the CI machine (Linux x86_64),
+// so they need libtorrent's desktop native library next to the Android ones.
+val libtorrentDesktop: Configuration by configurations.creating
+val libtorrentJniDir = layout.buildDirectory.dir("libtorrent-jni")
+val extractLibtorrentJni =
+    tasks.register<Copy>("extractLibtorrentJni") {
+        from({ libtorrentDesktop.map { zipTree(it) } })
+        include("lib/x86_64/libtorrent4j.so")
+        eachFile { path = name }
+        includeEmptyDirs = false
+        into(libtorrentJniDir)
+    }
+
+tasks.withType<Test>().configureEach {
+    dependsOn(extractLibtorrentJni)
+    systemProperty(
+        "libtorrent4j.jni.path",
+        libtorrentJniDir
+            .get()
+            .file("libtorrent4j.so")
+            .asFile.absolutePath,
+    )
+}
+
 ktlint {
     version.set(libs.versions.ktlint)
     android.set(true)
@@ -151,6 +175,7 @@ dependencies {
     implementation(libs.libtorrent4j.android.x64)
 
     testImplementation(libs.junit)
+    libtorrentDesktop(libs.libtorrent4j.linux)
 
     detektPlugins(libs.detekt.compose.rules)
 }
