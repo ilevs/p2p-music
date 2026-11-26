@@ -99,7 +99,7 @@ class RuTracker(
 }
 
 // A bencoded .torrent is a dictionary that starts with its "announce" or "info" key.
-private fun isTorrentFile(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes[0] == 'd'.code.toByte()
+internal fun isTorrentFile(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes[0] == 'd'.code.toByte()
 
 internal fun parseRuTrackerSearch(html: String): List<SearchResult> =
     Jsoup.parse(html).select("table#tor-tbl tr.hl-tr").mapNotNull { row ->

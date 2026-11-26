@@ -75,7 +75,7 @@ class AppGraph(
 
     // One client per proxy setting, so a changed proxy applies to the next request.
     @Synchronized
-    private fun trackerClient(): OkHttpClient {
+    internal fun trackerClient(): OkHttpClient {
         val proxy = settings.load().proxy()
         return trackerClient?.takeIf { it.first == proxy }?.second
             ?: trackerHttpClient(proxy, cookies).also { trackerClient = proxy to it }
