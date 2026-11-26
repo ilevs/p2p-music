@@ -23,7 +23,8 @@ naming:
   FunctionNaming:
     ignoreAnnotated: ['Composable']
   TopLevelPropertyNaming:
-    constantPattern: '[A-Z][A-Za-z0-9]*'
+    # ktlint requires SCREAMING_SNAKE_CASE for const vals; Compose code uses PascalCase for other top-level vals.
+    constantPattern: '[A-Z][_A-Za-z0-9]*'
 
 complexity:
   LongParameterList:

@@ -88,6 +88,9 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // libtorrent is ~16 MB per ABI uncompressed; compressing it keeps the universal APK small
+        // enough to copy to a head unit from a flash drive.
+        jniLibs.useLegacyPackaging = true
     }
 }
 
@@ -118,6 +121,30 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     }
 }
 
+// Unit tests stream real torrents between two libtorrent sessions on the CI machine (Linux x86_64),
+// so they need libtorrent's desktop native library next to the Android ones.
+val libtorrentDesktop: Configuration by configurations.creating
+val libtorrentJniDir = layout.buildDirectory.dir("libtorrent-jni")
+val extractLibtorrentJni =
+    tasks.register<Copy>("extractLibtorrentJni") {
+        from({ libtorrentDesktop.map { zipTree(it) } })
+        include("lib/x86_64/libtorrent4j.so")
+        eachFile { path = name }
+        includeEmptyDirs = false
+        into(libtorrentJniDir)
+    }
+
+tasks.withType<Test>().configureEach {
+    dependsOn(extractLibtorrentJni)
+    systemProperty(
+        "libtorrent4j.jni.path",
+        libtorrentJniDir
+            .get()
+            .file("libtorrent4j.so")
+            .asFile.absolutePath,
+    )
+}
+
 ktlint {
     version.set(libs.versions.ktlint)
     android.set(true)
@@ -138,8 +165,17 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
+    implementation(libs.libtorrent4j)
+    // Native libtorrent for phones (arm64), older head units (arm) and Intel head units like Haval Jolion (x86).
+    implementation(libs.libtorrent4j.android.arm)
+    implementation(libs.libtorrent4j.android.arm64)
+    implementation(libs.libtorrent4j.android.x86)
+    implementation(libs.libtorrent4j.android.x64)
 
     testImplementation(libs.junit)
+    libtorrentDesktop(libs.libtorrent4j.linux)
 
     detektPlugins(libs.detekt.compose.rules)
 }
