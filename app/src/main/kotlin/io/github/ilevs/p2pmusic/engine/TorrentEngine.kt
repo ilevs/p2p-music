@@ -24,6 +24,7 @@ import kotlin.concurrent.withLock
 
 private const val METADATA_TIMEOUT_MS = 60_000L
 private const val WAIT_STEP_MS = 500L
+private const val MIN_UPLOAD_BYTES_PER_SECOND = 1024
 
 /**
  * One libtorrent session for the whole app. Blocking calls: use them off the main thread.
@@ -47,24 +48,32 @@ class TorrentEngine(
     private val lock = ReentrantLock()
     private val changed = lock.newCondition()
 
-    private val session: SessionManager by lazy {
-        SessionManager().apply {
-            addListener(
-                object : AlertListener {
-                    override fun types(): IntArray =
-                        intArrayOf(
-                            AlertType.ADD_TORRENT.swig(),
-                            AlertType.METADATA_RECEIVED.swig(),
-                            AlertType.PIECE_FINISHED.swig(),
-                        )
+    private val sessionLazy =
+        lazy {
+            SessionManager().apply {
+                addListener(
+                    object : AlertListener {
+                        override fun types(): IntArray =
+                            intArrayOf(
+                                AlertType.ADD_TORRENT.swig(),
+                                AlertType.METADATA_RECEIVED.swig(),
+                                AlertType.PIECE_FINISHED.swig(),
+                            )
 
-                    override fun alert(alert: Alert<*>) {
-                        lock.withLock { changed.signalAll() }
-                    }
-                },
-            )
-            start(SessionParams(settings))
+                        override fun alert(alert: Alert<*>) {
+                            lock.withLock { changed.signalAll() }
+                        }
+                    },
+                )
+                start(SessionParams(settings))
+            }
         }
+    private val session: SessionManager by sessionLazy
+
+    /** Off caps uploads at 1 KB/s: libtorrent has no real zero, 0 means unlimited. */
+    fun setSeeding(enabled: Boolean) {
+        settings.uploadRateLimit(if (enabled) 0 else MIN_UPLOAD_BYTES_PER_SECOND)
+        if (sessionLazy.isInitialized()) session.applySettings(settings)
     }
 
     /** Adds a magnet link (or finds it in the session) and waits for its metadata. */
