@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import java.io.IOException
 
 data class SearchResult(
     val id: String,
@@ -28,7 +29,7 @@ interface TorrentSource {
 
 /**
  * Searches every source at once, so one blocked or broken site does not stop the search.
- * Fails only when nothing was found and some source failed, with that source's error.
+ * Fails only when nothing was found and some source failed, saying what each source answered.
  */
 class AllSources(
     private val sources: List<TorrentSource>,
@@ -44,8 +45,19 @@ class AllSources(
                     }.awaitAll()
             }
         val results = outcomes.flatMap { it.getOrDefault(emptyList()) }
-        if (results.isEmpty()) outcomes.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { throw it }
+        if (results.isEmpty() && outcomes.any { it.isFailure }) {
+            val answers = sources.zip(outcomes).map { (source, outcome) -> answer(source, outcome) }
+            throw IOException(answers.joinToString("; "))
+        }
         return results
+    }
+
+    private fun answer(
+        source: TorrentSource,
+        outcome: Result<List<SearchResult>>,
+    ): String {
+        val message = outcome.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "ничего не найдено"
+        return if (message.startsWith(source.name)) message else "${source.name}: $message"
     }
 
     override fun torrentFile(result: SearchResult): ByteArray =

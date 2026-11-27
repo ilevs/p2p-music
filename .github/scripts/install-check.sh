@@ -134,6 +134,34 @@ done || fail "No metadata or fewer than 5 peers from the live swarm"
 echo "$stats"
 adb exec-out screencap -p > screen-live.png
 echo "::endgroup::"
+# The user's path on the real sites: find an album in the catalog, tap it, and the app picks a release on
+# the trackers and plays it. Downloads part of a commercial album, which ilia allowed on 2026-11-27.
+echo "::group::Find an album and play it"
+adb shell am force-stop "$package"
+adb logcat -c
+adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
+sleep 10
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for _ in $(seq 10); do
+  sleep 3
+  # The row's "artist · year" line: the catalog also lists tributes named after the album.
+  python3 "$here/tap.py" "Pink Floyd · 1973" && break
+done || fail "The catalog shows no Pink Floyd album of 1973"
+for _ in $(seq 60); do
+  sleep 3
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+  # Playback starts on the player tab; an error from the trackers stays on the search screen.
+  python3 "$here/tap.py" "Плеер" > /dev/null || true
+done || {
+  python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  fail "The album found in the catalog does not play"
+}
+adb exec-out screencap -p > screen-album.png
+echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
   adb logcat -d -b crash
   adb logcat -d | grep -E "AndroidRuntime|$package|ExoPlayer|MediaSession" | tail -80
