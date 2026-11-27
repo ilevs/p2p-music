@@ -79,13 +79,6 @@ class TorrentReaderTest {
     }
 
     @Test
-    fun startsWithABrokenStateFile() {
-        val dir = temp.newFolder()
-        File(dir, "session.dat").writeText("cut short by a power loss")
-        TorrentEngine(dir, localSettings()).start()
-    }
-
-    @Test
     fun opensTheTorrentFileOverAMagnetWithoutPeers() {
         val other = TorrentEngine(temp.newFolder(), localSettings())
         val magnet = "magnet:?xt=urn:btih:$hash"

@@ -45,9 +45,6 @@ class TorrentEngine(
     val torrentsDir = File(dataDir, "torrents")
     private val downloadsDir = File(dataDir, "downloads")
 
-    // The DHT routing table from the last run, so a magnet finds peers without a cold bootstrap.
-    private val stateFile = File(dataDir, "session.dat")
-
     init {
         torrentsDir.mkdirs()
         downloadsDir.mkdirs()
@@ -82,10 +79,7 @@ class TorrentEngine(
                         }
                     },
                 )
-                // A state file cut short by a power loss is ignored, not fatal.
-                val params = runCatching { SessionParams(stateFile) }.getOrElse { SessionParams() }
-                params.settings = settings
-                start(params)
+                start(SessionParams(settings))
             }
         }
     private val session: SessionManager by sessionLazy
@@ -119,8 +113,6 @@ class TorrentEngine(
             session.download(magnet, downloadsDir, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
         }
         val handle = awaitMetadata(hash, timeoutMs)
-        // Only a speed-up for the next launch, so a failed save must not fail the open.
-        runCatching { stateFile.writeBytes(session.saveState()) }
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(torrentFileBytes(handle))
         return handle
     }

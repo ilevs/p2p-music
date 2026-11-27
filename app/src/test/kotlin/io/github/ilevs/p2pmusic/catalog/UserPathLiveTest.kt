@@ -13,7 +13,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.libtorrent4j.TorrentInfo
-import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
@@ -46,8 +45,8 @@ class UserPathLiveTest {
         assertTrue(info.isValid && info.numFiles() > 0)
 
         // The magnet alone, for as long as the app waits for it before it takes the .torrent.
-        val cold = temp.newFolder()
-        val (magnet, coldMs) = timed { runCatching { TorrentEngine(cold).openMagnet(pick.magnet, MAGNET_FIRST_MS) } }
+        val alone = TorrentEngine(temp.newFolder())
+        val (magnet, coldMs) = timed { runCatching { alone.openMagnet(pick.magnet, MAGNET_FIRST_MS) } }
         // The way the app opens a release: the magnet first, then the .torrent.
         val (handle, openMs) = timed { source.open(pick, TorrentEngine(temp.newFolder())) }
         assertEquals(info.infoHash(), handle.infoHash())
@@ -56,13 +55,6 @@ class UserPathLiveTest {
         println("METRIC torrent_file_ms=$torrentMs")
         println("METRIC magnet_metadata_cold_ms=${if (magnet.isSuccess) coldMs else "none_in_${MAGNET_FIRST_MS}_ms"}")
         println("METRIC release_open_ms=$openMs")
-        if (magnet.isSuccess) {
-            // A later launch: the DHT nodes of the last run are kept, the .torrent cache is not (a new album).
-            val warm = temp.newFolder()
-            File(cold, "session.dat").copyTo(File(warm, "session.dat"))
-            val (_, warmMs) = timed { TorrentEngine(warm).openMagnet(pick.magnet) }
-            println("METRIC magnet_metadata_saved_dht_ms=$warmMs")
-        }
     }
 
     private fun <T> timed(block: () -> T): Pair<T, Long> {
