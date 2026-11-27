@@ -56,9 +56,10 @@ class CatalogController(
             if (saved != null) {
                 stream.openHandle(album.title) { stream.engine.handle(saved.hash) }
             } else {
-                // A release of the album itself, else a discography found by the artist alone.
+                // A release of the album itself, else a discography found by the artist alone;
+                // a failed first search still tries the second, which reports the error.
                 val pick =
-                    pickTorrent(album, source.search("${album.artist} ${album.title}"))
+                    pickTorrent(album, runCatching { source.search("${album.artist} ${album.title}") }.getOrDefault(emptyList()))
                         ?: pickTorrent(album, source.search(album.artist))
                         ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
                 val bytes = source.torrentFile(pick)
