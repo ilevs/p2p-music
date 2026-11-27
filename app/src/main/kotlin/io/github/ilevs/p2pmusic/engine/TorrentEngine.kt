@@ -82,8 +82,9 @@ class TorrentEngine(
                     },
                 )
                 // A state file cut short by a power loss is ignored, not fatal.
-                val saved = runCatching { SessionParams(stateFile).apply { setSettings(settings) } }.getOrNull()
-                start(saved ?: SessionParams(settings))
+                val params = runCatching { SessionParams(stateFile) }.getOrElse { SessionParams() }
+                params.settings = settings
+                start(params)
             }
         }
     private val session: SessionManager by sessionLazy
@@ -196,11 +197,11 @@ class TorrentEngine(
         }
         return true
     }
+}
 
-    private fun torrentFileBytes(handle: TorrentHandle): ByteArray {
-        val params = AddTorrentParams().apply { torrentInfo = handle.torrentFile() }
-        return Vectors.byte_vector2bytes(libtorrent.write_torrent_file_buf_ex(params.swig()))
-    }
+private fun torrentFileBytes(handle: TorrentHandle): ByteArray {
+    val params = AddTorrentParams().apply { torrentInfo = handle.torrentFile() }
+    return Vectors.byte_vector2bytes(libtorrent.write_torrent_file_buf_ex(params.swig()))
 }
 
 /**

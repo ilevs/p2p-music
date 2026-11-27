@@ -6,7 +6,6 @@ import io.github.ilevs.p2pmusic.search.Rutor
 import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -37,10 +36,12 @@ class UserPathLiveTest {
 
         val results = source.search("${album.artist} ${album.title}")
         println("$album: ${results.size} releases, top ${results.sortedByDescending { it.seeds }.take(3)}")
-        val pick = pickTorrent(album, results) ?: pickTorrent(album, source.search(album.artist))
+        val pick =
+            checkNotNull(pickTorrent(album, results) ?: pickTorrent(album, source.search(album.artist))) {
+                "No release with seeds for $album among $results"
+            }
 
-        assertNotNull("No release with seeds for $album among $results", pick)
-        val (info, torrentMs) = timed { TorrentInfo.bdecode(source.torrentFile(checkNotNull(pick))) }
+        val (info, torrentMs) = timed { TorrentInfo.bdecode(source.torrentFile(pick)) }
         assertTrue(info.isValid && info.numFiles() > 0)
 
         // The way the app opens it: the magnet from the search page, metadata from peers.
