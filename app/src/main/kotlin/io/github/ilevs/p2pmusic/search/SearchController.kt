@@ -15,8 +15,9 @@ data class SearchState(
     val message: String? = null,
 )
 
-/** Search on the built-in tracker and the "check login" button of the settings screen. */
+/** Search on the built-in trackers and the "check login" button of the settings screen. */
 class SearchController(
+    private val source: TorrentSource,
     private val tracker: RuTracker,
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
@@ -25,11 +26,11 @@ class SearchController(
     val state: StateFlow<SearchState> = mutableState.asStateFlow()
 
     fun search(query: String) {
-        run { tracker.search(query).sortedByDescending { it.seeds } to null }
+        run { source.search(query).sortedByDescending { it.seeds } to null }
     }
 
     /** Blocking. */
-    fun torrentFile(result: SearchResult): ByteArray = tracker.torrentFile(result)
+    fun torrentFile(result: SearchResult): ByteArray = source.torrentFile(result)
 
     fun checkLogin() {
         run {

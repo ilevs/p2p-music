@@ -129,7 +129,7 @@ private fun SearchResults(
                 HorizontalDivider()
             }
         } else {
-            items(results, key = { it.id }) { result ->
+            items(results, key = { "${it.source}/${it.id}" }) { result ->
                 TwoLineRow(
                     title = result.title,
                     details =

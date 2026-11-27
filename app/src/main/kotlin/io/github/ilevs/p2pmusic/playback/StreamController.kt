@@ -16,6 +16,7 @@ import io.github.ilevs.p2pmusic.engine.TorrentRef
 import io.github.ilevs.p2pmusic.engine.isAudioFile
 import io.github.ilevs.p2pmusic.engine.parseTorrentUri
 import io.github.ilevs.p2pmusic.engine.toUri
+import io.github.ilevs.p2pmusic.engine.trackerCounts
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -224,7 +225,7 @@ class StreamController(
                 while (isActive) {
                     val handle = withContext(io) { hash?.let(engine::find) }
                     if (handle != null) {
-                        val (status, trackers) = withContext(io) { handle.status() to handle.trackers() }
+                        val (status, trackers) = withContext(io) { handle.status() to trackerCounts(handle) }
                         // A disk error pauses the torrent silently; without this the track just never starts.
                         val diskError = status.errorCode().takeIf { it.isError }?.message
                         mutableState.update {
@@ -233,14 +234,8 @@ class StreamController(
                                 downloadRate = status.downloadRate(),
                                 error = diskError ?: it.error,
                                 // Shows a blocked tracker or DHT when a torrent finds no peers.
-                                trackersUp =
-                                    trackers.count { t ->
-                                        t.endpoints().any { e ->
-                                            e.infohashV1().fails() ==
-                                                0.toShort()
-                                        }
-                                    },
-                                trackers = trackers.size,
+                                trackersUp = trackers.first,
+                                trackers = trackers.second,
                                 dhtNodes = engine.dhtNodes,
                             )
                         }

@@ -13,9 +13,11 @@ import io.github.ilevs.p2pmusic.catalog.MusicBrainz
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.TorrentDataSource
+import io.github.ilevs.p2pmusic.search.AllSources
 import io.github.ilevs.p2pmusic.search.MemoryCookieJar
 import io.github.ilevs.p2pmusic.search.ProxySettings
 import io.github.ilevs.p2pmusic.search.RuTracker
+import io.github.ilevs.p2pmusic.search.Rutor
 import io.github.ilevs.p2pmusic.search.SearchController
 import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import kotlinx.coroutines.CoroutineDispatcher
@@ -73,10 +75,12 @@ class AppGraph(
 
     private val tracker = RuTracker(client = ::trackerClient, credentials = { settings.load().credentials() })
 
-    val search = SearchController(tracker, scope, io)
+    private val sources = AllSources(listOf(tracker, Rutor(client = ::trackerClient)))
+
+    val search = SearchController(sources, tracker, scope, io)
 
     // The catalog is not blocked anywhere, so it goes direct, without the tracker proxy.
-    val catalog = CatalogController(MusicBrainz(OkHttpClient()), tracker, stream, settings, scope, io)
+    val catalog = CatalogController(MusicBrainz(OkHttpClient()), sources, stream, settings, scope, io)
 
     // One client per proxy setting, so a changed proxy applies to the next request.
     @Synchronized

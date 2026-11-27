@@ -7,7 +7,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import org.libtorrent4j.AnnounceEntry
 import org.libtorrent4j.TorrentInfo
 import kotlin.concurrent.thread
 
@@ -42,20 +41,33 @@ class LiveStreamTest {
         val engine = TorrentEngine(temp.newFolder())
         val info = TorrentInfo.bdecode(bytes)
         // Swarm state in the CI log, so a timeout says whether peers never came.
-        thread(isDaemon = true) {
-            while (true) {
-                engine.find(info.infoHash().toHex())?.let { handle ->
-                    val status = handle.status()
-                    println(
-                        "${status.state()} peers=${status.numPeers()} seeds=${status.numSeeds()} " +
-                            "rate=${status.downloadRate()} trackers=${handle.trackers().map(::trackerState)} " +
-                            "web seeds=${handle.urlSeeds()}",
-                    )
+        // Stopped before the test ends: polling a session that is being freed crashed the test JVM (exit 139).
+        val logger =
+            thread(isDaemon = true) {
+                try {
+                    while (true) {
+                        engine.find(info.infoHash().toHex())?.let { handle ->
+                            val status = handle.status()
+                            println(
+                                "${status.state()} peers=${status.numPeers()} seeds=${status.numSeeds()} " +
+                                    "rate=${status.downloadRate()} trackers up/all=${trackerCounts(handle)} " +
+                                    "web seeds=${handle.urlSeeds()}",
+                            )
+                        }
+                        Thread.sleep(STATUS_INTERVAL_MS)
+                    }
+                } catch (_: InterruptedException) {
+                    // The test is over.
                 }
-                Thread.sleep(STATUS_INTERVAL_MS)
             }
+        try {
+            println(checkStreams(engine, bytes))
+        } finally {
+            logger.interrupt()
+            logger.join()
+            // Otherwise the ISO keeps downloading into a deleted folder while the other tests run.
+            engine.find(info.infoHash().toHex())?.pause()
         }
-        println(checkStreams(engine, bytes))
     }
 
     private companion object {
@@ -103,7 +115,3 @@ private fun readSome(
     }
 
 private const val READ_BYTES = 64 * 1024
-
-// "url: fails, last message" per endpoint, to tell a refused announce from an empty swarm.
-private fun trackerState(entry: AnnounceEntry): String =
-    entry.url() + entry.endpoints().joinToString { " ${it.infohashV1().fails()} fails, '${it.infohashV1().message()}'" }
