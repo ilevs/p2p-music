@@ -221,7 +221,15 @@ class StreamController(
                 while (isActive) {
                     val status = withContext(io) { hash?.let(engine::find)?.status() }
                     if (status != null) {
-                        mutableState.update { it.copy(peers = status.numPeers(), downloadRate = status.downloadRate()) }
+                        // A disk error pauses the torrent silently; without this the track just never starts.
+                        val diskError = status.errorCode().takeIf { it.isError }?.message
+                        mutableState.update {
+                            it.copy(
+                                peers = status.numPeers(),
+                                downloadRate = status.downloadRate(),
+                                error = diskError ?: it.error,
+                            )
+                        }
                     }
                     delay(STATS_INTERVAL_MS)
                 }
