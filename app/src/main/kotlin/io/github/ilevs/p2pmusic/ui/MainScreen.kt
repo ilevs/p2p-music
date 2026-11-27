@@ -2,7 +2,9 @@ package io.github.ilevs.p2pmusic.ui
 
 import android.content.res.Configuration
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -50,15 +52,19 @@ fun MainScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
-            if (!isWide) {
-                NavigationBar {
-                    Tab.entries.forEach { item ->
-                        NavigationBarItem(
-                            selected = item == tab,
-                            onClick = { tab = item },
-                            icon = { Icon(item.icon, contentDescription = null) },
-                            label = { Text(stringResource(item.title)) },
-                        )
+            // Without the tab bar the mini-player is the lowest thing on screen and keeps off the system bar.
+            Column(modifier = if (isWide) Modifier.navigationBarsPadding() else Modifier) {
+                if (tab != Tab.Player) MiniPlayer(graph.stream, onOpen = { tab = Tab.Player })
+                if (!isWide) {
+                    NavigationBar {
+                        Tab.entries.forEach { item ->
+                            NavigationBarItem(
+                                selected = item == tab,
+                                onClick = { tab = item },
+                                icon = { Icon(item.icon, contentDescription = null) },
+                                label = { Text(stringResource(item.title)) },
+                            )
+                        }
                     }
                 }
             }
