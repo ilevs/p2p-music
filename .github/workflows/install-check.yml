@@ -59,7 +59,7 @@ jobs:
 
   # Built once and shared: parallel Gradle builds get rate-limited by Maven Central.
   install:
-    name: Install and launch (API ${{ matrix.api }} ${{ matrix.target }})
+    name: Install, launch, play (API ${{ matrix.api }} ${{ matrix.target }})
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -104,3 +104,11 @@ jobs:
           target: ${{ matrix.target }}
           disable-animations: true
           script: bash .github/scripts/install-check.sh app-universal-release.apk published.apk
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens-${{ matrix.api }}-${{ matrix.target }}
+          path: screen-*.png
+          if-no-files-found: ignore
