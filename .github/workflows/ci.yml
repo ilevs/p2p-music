@@ -59,10 +59,20 @@ jobs:
           # SoulseekLiveTest: a throwaway CI account, created on its first login; secrets override it if it is ever taken.
           SOULSEEK_LOGIN: ${{ secrets.SOULSEEK_LOGIN || 'p2pmusic-ci-jvm' }}
           SOULSEEK_PASSWORD: ${{ secrets.SOULSEEK_PASSWORD || 'p2pmusic-ci-not-secret' }}
+          # soulseek-rs-lib writes its log here; printed below when the tests fail.
+          RUST_LOG: info
+          LOG_FILE: ${{ runner.temp }}/soulseek.log
           # LiveStreamTest streams a public torrent from the real swarm. PRs only: the swarm sometimes
           # gives a runner no peers for minutes, and that must not block the release of merged code.
           LIVE_TESTS: ${{ github.event_name == 'pull_request' }}
         run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Print the Soulseek log and JVM crash reports
+        if: ${{ failure() }}
+        run: |
+          grep -v "Searching for\|search result" "$RUNNER_TEMP/soulseek.log" | tail -80 || true
+          grep -c "search result" "$RUNNER_TEMP/soulseek.log" || true
+          head -60 app/hs_err_pid*.log 2>/dev/null || true
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
