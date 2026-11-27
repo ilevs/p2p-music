@@ -99,11 +99,7 @@ private fun TabContent(
                     onTabChange(Tab.Player)
                 },
                 onOpen = { result ->
-                    if (result.magnet.isNotEmpty()) {
-                        graph.stream.open(result.magnet)
-                    } else {
-                        graph.stream.openTorrent { graph.search.torrentFile(result) }
-                    }
+                    graph.stream.openHandle { graph.search.open(result, graph.engine) }
                     onTabChange(Tab.Player)
                 },
                 modifier = modifier,

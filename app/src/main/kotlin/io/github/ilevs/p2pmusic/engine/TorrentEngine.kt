@@ -28,6 +28,7 @@ private const val MS_PER_SECOND = 1_000L
 private const val WAIT_STEP_MS = 500L
 private const val MIN_UPLOAD_BYTES_PER_SECOND = 1024
 private const val MIN_RECONNECT_SECONDS = 5
+private const val REMOVE_TIMEOUT_MS = 5_000L
 
 /**
  * One libtorrent session for the whole app. Blocking calls: use them off the main thread.
@@ -100,8 +101,11 @@ class TorrentEngine(
         if (sessionLazy.isInitialized()) session.applySettings(settings)
     }
 
-    /** Adds a magnet link (or finds it in the session) and waits for its metadata. */
-    fun openMagnet(magnet: String): TorrentHandle {
+    /** Adds a magnet link (or finds it in the session) and waits [timeoutMs] for its metadata. */
+    fun openMagnet(
+        magnet: String,
+        timeoutMs: Long = METADATA_TIMEOUT_MS,
+    ): TorrentHandle {
         val hash =
             try {
                 AddTorrentParams
@@ -114,7 +118,7 @@ class TorrentEngine(
         if (find(hash) == null && !addCached(hash)) {
             session.download(magnet, downloadsDir, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
         }
-        val handle = awaitMetadata(hash)
+        val handle = awaitMetadata(hash, timeoutMs)
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(torrentFileBytes(handle))
         return handle
     }
@@ -129,6 +133,11 @@ class TorrentEngine(
             }
         val hash = info.infoHash().toHex()
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(bytes)
+        // A magnet of this torrent that found no peers yet would keep waiting; the file has the metadata.
+        find(hash)?.takeUnless { it.status().hasMetadata() }?.let {
+            session.remove(it)
+            awaitUntil(REMOVE_TIMEOUT_MS) { find(hash) == null }
+        }
         if (find(hash) == null && !addCached(hash)) throw IOException("Не удалось добавить торрент $hash")
         return awaitMetadata(hash)
     }
@@ -168,10 +177,13 @@ class TorrentEngine(
         return true
     }
 
-    private fun awaitMetadata(hash: String): TorrentHandle {
-        val isReady = awaitUntil(METADATA_TIMEOUT_MS) { find(hash)?.status()?.hasMetadata() == true }
+    private fun awaitMetadata(
+        hash: String,
+        timeoutMs: Long = METADATA_TIMEOUT_MS,
+    ): TorrentHandle {
+        val isReady = awaitUntil(timeoutMs) { find(hash)?.status()?.hasMetadata() == true }
         if (!isReady) {
-            val seconds = METADATA_TIMEOUT_MS / MS_PER_SECOND
+            val seconds = timeoutMs / MS_PER_SECOND
             throw IOException("За $seconds с не нашлось ни одного пира: раздача мёртвая или сеть режет торренты")
         }
         stateFile.writeBytes(session.saveState())
@@ -199,7 +211,8 @@ class TorrentEngine(
     }
 }
 
-private fun torrentFileBytes(handle: TorrentHandle): ByteArray {
+// Not private: called from the class, and lint forbids synthetic accessors.
+internal fun torrentFileBytes(handle: TorrentHandle): ByteArray {
     val params = AddTorrentParams().apply { torrentInfo = handle.torrentFile() }
     return Vectors.byte_vector2bytes(libtorrent.write_torrent_file_buf_ex(params.swig()))
 }
@@ -213,10 +226,3 @@ fun trackerCounts(handle: TorrentHandle): Pair<Int, Int> {
     // The monitor keeps the vector reachable, so not freed, until its entries are read.
     return synchronized(entries) { entries.count { it.verified } to entries.size }
 }
-
-/** The info hash of [magnet], hex. Throws IllegalArgumentException for a malformed link. */
-fun magnetHash(magnet: String): String =
-    AddTorrentParams
-        .parseMagnetUri(magnet)
-        .infoHashes.best
-        .toHex()

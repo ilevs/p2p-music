@@ -108,15 +108,9 @@ class StreamController(
     }
 
     /**
-     * Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker.
+     * Opens the torrent that [open] returns off the main thread.
      * With an [album], keeps only that album's files (the torrent may be a discography) and plays it.
      */
-    fun openTorrent(
-        album: String? = null,
-        download: () -> ByteArray,
-    ) = openHandle(album) { engine.openTorrent(download()) }
-
-    /** Opens the torrent that [open] returns off the main thread; [album] as in [openTorrent]. */
     fun openHandle(
         album: String? = null,
         open: () -> TorrentHandle,

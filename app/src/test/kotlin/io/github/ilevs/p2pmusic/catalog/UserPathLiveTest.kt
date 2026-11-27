@@ -3,6 +3,7 @@ package io.github.ilevs.p2pmusic.catalog
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.search.AllSources
 import io.github.ilevs.p2pmusic.search.Rutor
+import io.github.ilevs.p2pmusic.search.open
 import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
@@ -44,23 +45,32 @@ class UserPathLiveTest {
         val (info, torrentMs) = timed { TorrentInfo.bdecode(source.torrentFile(pick)) }
         assertTrue(info.isValid && info.numFiles() > 0)
 
-        // The way the app opens it: the magnet from the search page, metadata from peers.
+        // The magnet alone, for as long as the app waits for it before it takes the .torrent.
         val cold = temp.newFolder()
-        val (handle, coldMs) = timed { TorrentEngine(cold).openMagnet(pick.magnet) }
+        val (magnet, coldMs) = timed { runCatching { TorrentEngine(cold).openMagnet(pick.magnet, MAGNET_FIRST_MS) } }
+        // The way the app opens a release: the magnet first, then the .torrent.
+        val (handle, openMs) = timed { source.open(pick, TorrentEngine(temp.newFolder())) }
         assertEquals(info.infoHash(), handle.infoHash())
 
-        // A later launch: the DHT nodes of the last run are kept, the .torrent cache is not (a new album).
-        val warm = temp.newFolder()
-        File(cold, "session.dat").copyTo(File(warm, "session.dat"))
-        val (_, warmMs) = timed { TorrentEngine(warm).openMagnet(pick.magnet) }
         // Collected into the CI job summary, to compare builds.
         println("METRIC torrent_file_ms=$torrentMs")
-        println("METRIC magnet_metadata_cold_ms=$coldMs")
-        println("METRIC magnet_metadata_saved_dht_ms=$warmMs")
+        println("METRIC magnet_metadata_cold_ms=${if (magnet.isSuccess) coldMs else "none_in_${MAGNET_FIRST_MS}_ms"}")
+        println("METRIC release_open_ms=$openMs")
+        if (magnet.isSuccess) {
+            // A later launch: the DHT nodes of the last run are kept, the .torrent cache is not (a new album).
+            val warm = temp.newFolder()
+            File(cold, "session.dat").copyTo(File(warm, "session.dat"))
+            val (_, warmMs) = timed { TorrentEngine(warm).openMagnet(pick.magnet) }
+            println("METRIC magnet_metadata_saved_dht_ms=$warmMs")
+        }
     }
 
     private fun <T> timed(block: () -> T): Pair<T, Long> {
         val start = System.nanoTime()
         return block() to TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+    }
+
+    private companion object {
+        const val MAGNET_FIRST_MS = 20_000L
     }
 }

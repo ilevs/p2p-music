@@ -4,6 +4,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -18,6 +19,7 @@ import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.swig.settings_pack
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import kotlin.random.Random
 
 /**
@@ -35,6 +37,7 @@ class TorrentReaderTest {
     private lateinit var engine: TorrentEngine
     private lateinit var hash: String
     private lateinit var info: TorrentInfo
+    private lateinit var torrentBytes: ByteArray
 
     @Before
     fun setUp() {
@@ -44,7 +47,7 @@ class TorrentReaderTest {
         File(album, "2001 - Первый альбом").apply { mkdirs() }.resolve(TRACK_NAME).writeBytes(track)
         File(album, "2001 - Первый альбом").resolve(NEXT_TRACK_NAME).writeBytes(cover)
         File(album, "Сканы").apply { mkdirs() }.resolve("scans.bin").writeBytes(cover)
-        val torrentBytes =
+        torrentBytes =
             TorrentBuilder()
                 .path(album)
                 .pieceSize(PIECE_SIZE)
@@ -80,6 +83,15 @@ class TorrentReaderTest {
         val dir = temp.newFolder()
         File(dir, "session.dat").writeText("cut short by a power loss")
         TorrentEngine(dir, localSettings()).start()
+    }
+
+    @Test
+    fun opensTheTorrentFileOverAMagnetWithoutPeers() {
+        val other = TorrentEngine(temp.newFolder(), localSettings())
+        val magnet = "magnet:?xt=urn:btih:$hash"
+        assertThrows(IOException::class.java) { other.openMagnet(magnet, timeoutMs = 1) }
+
+        assertEquals(info.numFiles(), other.openTorrent(torrentBytes).torrentFile().numFiles())
     }
 
     @Test

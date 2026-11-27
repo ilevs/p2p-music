@@ -2,9 +2,9 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
-import io.github.ilevs.p2pmusic.engine.magnetHash
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.search.TorrentSource
+import io.github.ilevs.p2pmusic.search.open
 import io.github.ilevs.p2pmusic.toJson
 import io.github.ilevs.p2pmusic.toSavedAlbum
 import kotlinx.coroutines.CoroutineDispatcher
@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import org.libtorrent4j.TorrentInfo
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -64,14 +63,11 @@ class CatalogController(
                     pickTorrent(album, exact.getOrDefault(emptyList()))
                         ?: pickTorrent(album, source.search(album.artist))
                         ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
-                // The magnet needs only peers; the .torrent host (d.rutor.info) can be blocked while search works.
-                val magnet = pick.magnet.takeIf { it.isNotEmpty() }
-                val bytes = if (magnet == null) source.torrentFile(pick) else null
-                val hash = bytes?.let { TorrentInfo.bdecode(it).infoHash().toHex() } ?: magnetHash(magnet.orEmpty())
-                settings.addToLibrary(SavedAlbum(album, hash))
-                mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
                 stream.openHandle(album.title) {
-                    bytes?.let(stream.engine::openTorrent) ?: stream.engine.openMagnet(magnet.orEmpty())
+                    source.open(pick, stream.engine).also { handle ->
+                        settings.addToLibrary(SavedAlbum(album, handle.infoHash().toHex()))
+                        mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
+                    }
                 }
             }
             null

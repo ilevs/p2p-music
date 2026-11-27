@@ -1,10 +1,14 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import org.libtorrent4j.TorrentHandle
 import java.io.IOException
+
+private const val MAGNET_FIRST_MS = 20_000L
 
 data class SearchResult(
     val id: String,
@@ -76,3 +80,16 @@ class AllSources(
         }
     }
 }
+
+/**
+ * Opens [result] by its magnet, which needs only peers; by the .torrent when the tracker shows no magnet
+ * or the magnet finds no metadata in time. Blocking.
+ */
+fun TorrentSource.open(
+    result: SearchResult,
+    engine: TorrentEngine,
+): TorrentHandle =
+    result.magnet
+        .takeIf { it.isNotEmpty() }
+        ?.let { runCatching { engine.openMagnet(it, MAGNET_FIRST_MS) }.getOrNull() }
+        ?: engine.openTorrent(torrentFile(result))
