@@ -25,6 +25,7 @@ import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.io.File
 
@@ -45,10 +46,7 @@ class AppGraph(
 
     private val storage = context.getExternalFilesDir(null) ?: context.filesDir
 
-    val engine =
-        TorrentEngine(File(storage, "torrent")).apply {
-            setSeeding(settings.load().seeding)
-        }
+    val engine = TorrentEngine(File(storage, "torrent"))
 
     private val soulseek = SoulseekEngine(File(storage, "soulseek"))
 
@@ -74,6 +72,10 @@ class AppGraph(
             .build()
 
     val scope = MainScope()
+
+    init {
+        scope.launch(io) { engine.setSeeding(settings.load().seeding) }
+    }
 
     val stream = StreamController(engine, soulseek, settings, player, scope, io)
 

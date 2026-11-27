@@ -178,6 +178,10 @@ tasks.withType<Test>().configureEach {
     jvmArgs("-XX:ErrorFile=${layout.buildDirectory.get().asFile}/hs_err_pid%p.log")
     // LiveStreamTest prints swarm state and timings for the CI log.
     testLogging.showStandardStreams = true
+    // The last test started names the culprit when the test JVM dies without a report.
+    testLogging.events("started", "failed")
+    // One JVM per test class: libtorrent sessions of one class do not outlive it into the next.
+    forkEvery = 1
     systemProperty(
         "libtorrent4j.jni.path",
         libtorrentJniDir

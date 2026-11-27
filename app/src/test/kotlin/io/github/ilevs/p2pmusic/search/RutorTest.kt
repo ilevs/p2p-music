@@ -27,8 +27,24 @@ class RutorTest {
         assertEquals("/search/0/2/300/0/%D0%9A%D0%B8%D0%BD%D0%BE%201988", server.takeRequest().path)
         assertEquals(
             listOf(
-                SearchResult("373821", "Кино - Группа крови (1988) FLAC", "Rutor", 841_482_240L, 12, 3),
-                SearchResult("449720", "Кино - Звезда по имени Солнце (1989) MP3", "Rutor", 1_589_137_899L, 0, 1),
+                SearchResult(
+                    "373821",
+                    "Кино - Группа крови (1988) FLAC",
+                    "Rutor",
+                    841_482_240L,
+                    12,
+                    3,
+                    magnet = "magnet:?xt=urn:btih:2a568ddd17e56ce9c655ff99f7eea7022d1bf721",
+                ),
+                SearchResult(
+                    "449720",
+                    "Кино - Звезда по имени Солнце (1989) MP3",
+                    "Rutor",
+                    1_589_137_899L,
+                    0,
+                    1,
+                    magnet = "magnet:?xt=urn:btih:5fc1d440de45a191f7e284ad4b58156c3acb0e0b",
+                ),
             ),
             results,
         )

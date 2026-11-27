@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
@@ -77,6 +78,7 @@ class StreamController(
     private var startClock = 0L
     private var seekClock = 0L
     private var statsJob: Job? = null
+    private var retriedTrack: String? = null
 
     init {
         player.addListener(
@@ -84,6 +86,8 @@ class StreamController(
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) onReady()
                 }
+
+                override fun onPlayerError(error: PlaybackException) = onError()
             },
         )
         // The car can lose power at any moment, so the spot to resume from is saved while playing.
@@ -112,8 +116,8 @@ class StreamController(
     }
 
     /**
-     * Opens the torrent that [open] returns off the main thread, e.g. from a tracker's .torrent. With an [album],
-     * keeps only that album's files (the torrent may be a discography) and plays it.
+     * Opens the torrent that [open] returns off the main thread.
+     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it.
      */
     fun openHandle(
         album: String? = null,
@@ -186,8 +190,20 @@ class StreamController(
         player.seekTo(positionMs)
     }
 
+    // shortcut: one retry per track, because libtorrent reports a piece as verified while its blocks still wait
+    // in the write queue, and the file then reads as zeros ("no extractor could read the stream"); read through
+    // libtorrent's read_piece if errors show up in the middle of tracks.
+    internal fun onError() {
+        val track = player.currentMediaItem?.mediaId
+        if (track != null && track != retriedTrack) {
+            retriedTrack = track
+            player.prepare()
+        }
+    }
+
     // Not private: called from the listener object, and lint forbids synthetic accessors.
     internal fun onReady() {
+        retriedTrack = null
         val now = SystemClock.elapsedRealtime()
         when {
             seekClock > 0 -> mutableState.update { it.copy(seekMs = now - seekClock) }

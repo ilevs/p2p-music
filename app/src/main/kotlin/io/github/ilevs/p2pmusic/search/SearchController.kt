@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.libtorrent4j.TorrentHandle
 
 data class SearchState(
     val results: List<SearchResult> = emptyList(),
@@ -30,7 +32,10 @@ class SearchController(
     }
 
     /** Blocking. */
-    fun torrentFile(result: SearchResult): ByteArray = source.torrentFile(result)
+    fun open(
+        result: SearchResult,
+        engine: TorrentEngine,
+    ): TorrentHandle = source.open(result, engine)
 
     fun checkLogin() {
         run {

@@ -6,10 +6,12 @@ import io.github.ilevs.p2pmusic.search.SearchResult
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 class CatalogTest {
     @Test
@@ -30,6 +32,18 @@ class CatalogTest {
         server.enqueue(MockResponse().setResponseCode(503))
         server.enqueue(MockResponse().setBody(RELEASE_GROUPS))
         val albums = MusicBrainz(OkHttpClient(), server.url("/ws/2/"), retryDelayMs = 0).searchAlbums("кино")
+        assertEquals(1, albums.size)
+        assertEquals(2, server.requestCount)
+        server.shutdown()
+    }
+
+    @Test
+    fun retriesWhenThereIsNoAnswer() {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        server.enqueue(MockResponse().setBody(RELEASE_GROUPS))
+        val impatient = OkHttpClient.Builder().readTimeout(TIMEOUT_MS, TimeUnit.MILLISECONDS).build()
+        val albums = MusicBrainz(impatient, server.url("/ws/2/"), retryDelayMs = 0).searchAlbums("кино")
         assertEquals(1, albums.size)
         assertEquals(2, server.requestCount)
         server.shutdown()
@@ -86,6 +100,7 @@ class CatalogTest {
     ) = SearchResult(id, title, "", 0, seeds, 0)
 
     private companion object {
+        const val TIMEOUT_MS = 200L
         val RELEASE_GROUPS =
             """
             {"release-groups": [{

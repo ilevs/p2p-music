@@ -57,6 +57,7 @@ internal fun parseRutorSearch(html: String): List<SearchResult> =
                 sizeBytes = parseSize(cells.getOrNull(cells.size - 2)?.text().orEmpty()),
                 seeds = row.number("span.green"),
                 leeches = row.number("span.red"),
+                magnet = row.selectFirst("a[href^=magnet:]")?.attr("href").orEmpty(),
             )
         }
     }
