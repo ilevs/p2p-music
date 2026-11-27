@@ -49,44 +49,38 @@ fun StreamScreen(
 ) {
     val state by controller.state.collectAsState()
     var magnet by rememberSaveable { mutableStateOf("") }
-    Column(
+    // One scrolling list: on short screens (head units, small emulators) fixed panels left the tracks no height.
+    LazyColumn(
         modifier = modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = magnet,
-                onValueChange = { magnet = it },
-                label = { Text(stringResource(R.string.magnet_label)) },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            Button(
-                onClick = { controller.open(magnet.trim()) },
-                enabled = magnet.isNotBlank() && !state.isLoading,
-                modifier = Modifier.padding(start = 8.dp),
-            ) { Text(stringResource(R.string.open)) }
-        }
-        StatusText(state)
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(state.files, key = { it.index }) { file ->
-                Text(
-                    text = file.name,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                controller.play(
-                                    file,
-                                )
-                            }.padding(vertical = 12.dp),
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = magnet,
+                    onValueChange = { magnet = it },
+                    label = { Text(stringResource(R.string.magnet_label)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
                 )
+                Button(
+                    onClick = { controller.open(magnet.trim()) },
+                    enabled = magnet.isNotBlank() && !state.isLoading,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { Text(stringResource(R.string.open)) }
             }
         }
-        PlayerPanel(controller)
-        Text(text = statsText(state), style = MaterialTheme.typography.bodySmall)
+        item { StatusText(state) }
+        items(state.files, key = { it.index }) { file ->
+            Text(
+                text = file.name,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().clickable { controller.play(file) }.padding(vertical = 12.dp),
+            )
+        }
+        item { PlayerPanel(controller) }
+        item { Text(text = statsText(state), style = MaterialTheme.typography.bodySmall) }
     }
 }
 
