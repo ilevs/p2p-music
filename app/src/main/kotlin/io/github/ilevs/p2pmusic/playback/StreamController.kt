@@ -220,7 +220,6 @@ class StreamController(
             scope.launch {
                 while (isActive) {
                     val status = withContext(io) { hash?.let(engine::find)?.status() }
-                    withContext(io) { hash?.let(engine::find)?.let(::probe) }
                     if (status != null) {
                         // A disk error pauses the torrent silently; without this the track just never starts.
                         val diskError = status.errorCode().takeIf { it.isError }?.message
@@ -235,16 +234,5 @@ class StreamController(
                     delay(STATS_INTERVAL_MS)
                 }
             }
-    }
-
-    // Probe for the stuck-playback investigation; removed once found.
-    private fun probe(handle: TorrentHandle) {
-        val status = handle.status()
-        val peers = handle.peerInfo().joinToString { "${it.ip()} flags=${Integer.toHexString(it.flags())}" }
-        android.util.Log.i(
-            "P2pMusic",
-            "state=${status.state()} wanted=${status.totalWanted()} done=${status.totalWantedDone()} " +
-                "prios=${handle.filePriorities().joinToString()} peers=[$peers]",
-        )
     }
 }
