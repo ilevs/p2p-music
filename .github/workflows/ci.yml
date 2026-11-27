@@ -57,7 +57,7 @@ jobs:
       # A native crash of the test JVM (exit value 139) leaves only this file to say where it happened.
       - name: Print the JVM crash report
         if: ${{ failure() }}
-        run: head -n 120 app/hs_err_pid*.log 2>/dev/null || true
+        run: find . -name "hs_err*" -print -exec head -n 120 {} \; ; dmesg 2>/dev/null | tail -n 5 || true
 
       - name: Speed metrics
         if: ${{ !cancelled() }}
