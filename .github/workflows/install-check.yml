@@ -52,7 +52,7 @@ jobs:
             "$zipalign" -c -P 16 4 "$apk" && echo "aligned: $apk"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-apk
           path: app/build/outputs/apk/release/app-universal-release.apk
@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screens-${{ matrix.api }}-${{ matrix.target }}
           path: screen-*.png
