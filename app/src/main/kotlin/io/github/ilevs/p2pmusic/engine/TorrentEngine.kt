@@ -119,6 +119,8 @@ class TorrentEngine(
             session.download(magnet, downloadsDir, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
         }
         val handle = awaitMetadata(hash, timeoutMs)
+        // Only a speed-up for the next launch, so a failed save must not fail the open.
+        runCatching { stateFile.writeBytes(session.saveState()) }
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(torrentFileBytes(handle))
         return handle
     }
@@ -186,7 +188,6 @@ class TorrentEngine(
             val seconds = timeoutMs / MS_PER_SECOND
             throw IOException("За $seconds с не нашлось ни одного пира: раздача мёртвая или сеть режет торренты")
         }
-        stateFile.writeBytes(session.saveState())
         return requireNotNull(find(hash))
     }
 
