@@ -1,4 +1,4 @@
-"""Writes a one-track album (a second of silence as WAV) and its .torrent; prints the info hash.
+"""Writes a one-track album (a minute of silence as WAV) and its .torrent; prints the info hash.
 
 Usage: make-test-torrent.py <out dir>. Creates <out>/data/<album>/<track> and <out>/<hash>.torrent.
 """
@@ -25,7 +25,7 @@ def bencode(value):
     return b"d" + b"".join(bencode(k) + bencode(value[k]) for k in keys) + b"e"
 
 
-def wav(seconds=3, rate=44100):
+def wav(seconds=60, rate=8000):
     frames = b"\0\0" * rate * seconds
     header = b"RIFF" + struct.pack("<I", 36 + len(frames)) + b"WAVEfmt "
     header += struct.pack("<IHHIIHH", 16, 1, 1, rate, rate * 2, 2, 16) + b"data" + struct.pack("<I", len(frames))
