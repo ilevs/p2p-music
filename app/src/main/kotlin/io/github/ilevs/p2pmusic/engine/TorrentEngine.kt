@@ -20,6 +20,7 @@ import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -29,6 +30,7 @@ private const val WAIT_STEP_MS = 500L
 private const val MIN_UPLOAD_BYTES_PER_SECOND = 1024
 private const val MIN_RECONNECT_SECONDS = 5
 private const val REMOVE_TIMEOUT_MS = 5_000L
+private const val FLUSH_TIMEOUT_MS = 5_000L
 
 /**
  * One libtorrent session for the whole app. Blocking calls: use them off the main thread.
@@ -61,6 +63,7 @@ class TorrentEngine(
     // Signalled on every alert we listen to; waiters re-check their condition after it.
     private val lock = ReentrantLock()
     private val changed = lock.newCondition()
+    private val flushes = AtomicInteger()
 
     private val sessionLazy =
         lazy {
@@ -72,9 +75,11 @@ class TorrentEngine(
                                 AlertType.ADD_TORRENT.swig(),
                                 AlertType.METADATA_RECEIVED.swig(),
                                 AlertType.PIECE_FINISHED.swig(),
+                                AlertType.CACHE_FLUSHED.swig(),
                             )
 
                         override fun alert(alert: Alert<*>) {
+                            if (alert.type() == AlertType.CACHE_FLUSHED) flushes.incrementAndGet()
                             lock.withLock { changed.signalAll() }
                         }
                     },
@@ -150,12 +155,23 @@ class TorrentEngine(
 
     fun find(hash: String): TorrentHandle? = session.find(Sha1Hash.parseHex(hash))?.takeIf { it.isValid }
 
-    /** Blocks until [piece] is downloaded and verified. Interrupting the thread cancels the wait. */
+    /**
+     * Blocks until [piece] is downloaded, verified and on disk. Interrupting the thread cancels the wait.
+     *
+     * libtorrent verifies a piece from memory while its blocks still wait in the write queue, so a fresh
+     * piece read from the file right away could be zeros, and the player found no audio format in them.
+     */
     fun awaitPiece(
         handle: TorrentHandle,
         piece: Int,
     ) {
+        if (handle.havePiece(piece)) return
         awaitUntil(Long.MAX_VALUE) { handle.havePiece(piece) }
+        // shortcut: a second reader that finds the piece just verified does not wait for this flush;
+        // track unflushed pieces if two readers ever read the same fresh piece.
+        val before = flushes.get()
+        handle.flushCache()
+        awaitUntil(FLUSH_TIMEOUT_MS) { flushes.get() != before }
     }
 
     // Loads the whole .torrent, not just its info dictionary, so the torrent keeps its trackers.
