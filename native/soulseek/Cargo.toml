@@ -17,3 +17,8 @@ soulseek-rs-lib = "=20.0.0"
 opt-level = "s"
 lto = true
 strip = true
+
+# 20.0.0 with one fix: it compares a u32 rlimit with a u64 on 32-bit Android (armeabi-v7a, x86).
+# shortcut: a vendored copy; drop it when an upstream release compiles for those targets.
+[patch.crates-io]
+soulseek-rs-lib = { path = "vendor/soulseek-rs-lib" }
