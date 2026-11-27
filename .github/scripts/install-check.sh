@@ -44,6 +44,8 @@ fail() {
   adb shell pidof "$package" || echo "The app is not running"
   adb logcat -d -b crash
   adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession" | tail -60
+  # The head of a playback error, which the tail above cuts off.
+  adb logcat -d | grep -E -A3 "Playback error|Caused by" | grep -v "^--" | head -40
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
   # The stats line (peers, trackers, DHT) is at the bottom of the player list.
   adb shell input swipe 160 500 160 100; sleep 1
