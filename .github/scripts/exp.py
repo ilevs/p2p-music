@@ -10,8 +10,9 @@ h.file_priority(0, 7)
 end = time.time() + 90
 while time.time() < end:
     for a in s.pop_alerts():
-        if any(k in a.what() for k in ('url_seed', 'peer', 'tracker', 'http', 'error', 'state')) and 'block' not in a.what():
-            print(a.what(), a.message()[:300])
+        m = a.message()
+        if 'url_seed' in a.what() or 'error' in a.what() or 'archive.org' in m and 'tracker' not in a.what():
+            print(a.what(), m[:300])
     st = h.status()
-    print('STATUS', st.state, 'peers', st.num_peers, 'rate', st.download_rate, 'done', st.total_wanted_done, [ (pi.ip, pi.client, pi.flags & 1, pi.down_speed) for pi in h.get_peer_info()][:5])
+    print('STATUS', st.state, 'peers', st.num_peers, 'rate', st.download_rate, 'done', st.total_wanted_done, [ (pi.ip, pi.client, pi.flags & 1, pi.down_speed) for pi in h.get_peer_info()])
     time.sleep(3)
