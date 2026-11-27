@@ -64,15 +64,14 @@ class CatalogController(
                     pickTorrent(album, exact.getOrDefault(emptyList()))
                         ?: pickTorrent(album, source.search(album.artist))
                         ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
-                val bytes = runCatching { source.torrentFile(pick) }
-                // The .torrent host (d.rutor.info) can be blocked or slow while the search page works;
-                // the magnet from the search page needs only peers.
-                val magnet = pick.magnet.takeIf { bytes.isFailure && it.isNotEmpty() }
-                val hash = magnet?.let(::magnetHash) ?: TorrentInfo.bdecode(bytes.getOrThrow()).infoHash().toHex()
+                // The magnet needs only peers; the .torrent host (d.rutor.info) can be blocked while search works.
+                val magnet = pick.magnet.takeIf { it.isNotEmpty() }
+                val bytes = if (magnet == null) source.torrentFile(pick) else null
+                val hash = bytes?.let { TorrentInfo.bdecode(it).infoHash().toHex() } ?: magnetHash(magnet.orEmpty())
                 settings.addToLibrary(SavedAlbum(album, hash))
                 mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
                 stream.openHandle(album.title) {
-                    magnet?.let(stream.engine::openMagnet) ?: stream.engine.openTorrent(bytes.getOrThrow())
+                    bytes?.let(stream.engine::openTorrent) ?: stream.engine.openMagnet(magnet.orEmpty())
                 }
             }
             null
