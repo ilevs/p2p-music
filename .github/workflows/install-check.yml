@@ -103,6 +103,8 @@ jobs:
 
       - name: Install and launch on the emulator
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SOULSEEK_PASSWORD: ${{ secrets.SOULSEEK_PASSWORD }}
         with:
           api-level: ${{ matrix.api }}
           arch: x86_64

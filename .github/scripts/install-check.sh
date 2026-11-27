@@ -143,3 +143,50 @@ fi
 adb logcat -d -b crash | tail -40
 adb logcat -d | grep -iE "ExoPlayerImpl|PlaybackException|TorrentDataSource" | tail -20
 echo "Played a track."
+
+# Soulseek, the fallback source: the tracker proxy points nowhere, so both trackers fail and the catalog album
+# must come from Soulseek, the way a user hears an album the trackers do not have. One fixed account per
+# emulator: the server drops a session when the same name logs in elsewhere.
+echo "::group::Play a catalog album from Soulseek"
+user="p2pmusic-ci-$(adb shell getprop ro.build.version.sdk | tr -d '\r')-$(adb shell getconf PAGE_SIZE | tr -d '\r')"
+type_into() {
+  python3 "$here/tap.py" "$1" "${3:-0}" || { adb shell input swipe 160 600 160 300 200; python3 "$here/tap.py" "$1" "${3:-0}"; } \
+    || fail "No field $1 on the settings screen"
+  adb shell input text "$2"
+  adb shell input keyevent 4  # hide the keyboard
+}
+adb shell am force-stop "$package"
+adb logcat -c
+adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
+sleep 10
+python3 "$here/tap.py" "Настройки" || fail "No settings tab"
+type_into "Логин" "$user" 1
+type_into "Пароль" "${SOULSEEK_PASSWORD:-p2pmusic-ci-not-secret}" 1
+type_into "Адрес" "127.0.0.1"
+type_into "Порт" "9"
+for _ in 1 2 3; do python3 "$here/tap.py" "Сохранить" && break; adb shell input swipe 160 600 160 200 200; done \
+  || fail "No save button"
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for _ in $(seq 10); do
+  sleep 3
+  python3 "$here/tap.py" "Pink Floyd · 1973" && break
+done || fail "The catalog shows no Pink Floyd album of 1973"
+started=$(date +%s)
+for _ in $(seq 60); do
+  sleep 3
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+  python3 "$here/tap.py" "Плеер" > /dev/null || true
+done || {
+  python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*Soulseek[^"]*"'
+  adb exec-out screencap -p > screen-soulseek.png
+  fail "The album does not play from Soulseek"
+}
+echo "Soulseek album plays $(( $(date +%s) - started )) s after the tap."
+adb exec-out screencap -p > screen-soulseek.png
+adb shell pidof "$package" > /dev/null || fail "The app died while playing from Soulseek"
+echo "::endgroup::"
