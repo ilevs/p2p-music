@@ -64,7 +64,11 @@ for _ in $(seq 10); do
   python3 "$here/tap.py" "Тишина" && break
 done || fail "No track on the player screen"
 adb exec-out screencap -p > screen-tracks.png
-sleep 10
+# The play button turns into "Пауза" only once the player has data and plays.
+for _ in $(seq 10); do
+  sleep 3
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null && adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+done || fail "The track does not start playing"
 adb exec-out screencap -p > screen-playing.png
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then

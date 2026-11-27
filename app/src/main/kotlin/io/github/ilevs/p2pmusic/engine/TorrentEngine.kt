@@ -15,6 +15,7 @@ import org.libtorrent4j.alerts.AlertType
 import org.libtorrent4j.swig.error_code
 import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.load_torrent_limits
+import org.libtorrent4j.swig.settings_pack
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
@@ -45,6 +46,9 @@ class TorrentEngine(
     init {
         torrentsDir.mkdirs()
         downloadsDir.mkdirs()
+        // A torrent with nothing selected counts as finished, and libtorrent would drop its seeds right after
+        // the metadata; then the first track waits until they are found again.
+        settings.setBoolean(settings_pack.bool_types.close_redundant_connections.swigValue(), false)
     }
 
     // Signalled on every alert we listen to; waiters re-check their condition after it.
