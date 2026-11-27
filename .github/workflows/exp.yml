@@ -1,0 +1,9 @@
+name: Experiment
+on: push
+jobs:
+  exp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y python3-libtorrent
+      - run: curl -sSfL -o live.torrent https://archive.org/download/OpenGoldbergVariations/OpenGoldbergVariations_archive.torrent && timeout 120 python3 .github/scripts/exp.py live.torrent | uniq -c | head -400
