@@ -54,14 +54,14 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(stringResource(R.string.rutracker_section), style = MaterialTheme.typography.titleMedium)
-        Credentials(settings.rutrackerLogin, settings.rutrackerPassword) { login, password ->
+        Credentials(settings.rutrackerLogin, settings.rutrackerPassword, onChange = { login, password ->
             settings = settings.copy(rutrackerLogin = login, rutrackerPassword = password)
-        }
+        })
         Text(stringResource(R.string.soulseek_section), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.soulseek_hint), style = MaterialTheme.typography.bodySmall)
-        Credentials(settings.soulseekLogin, settings.soulseekPassword) { login, password ->
+        Credentials(settings.soulseekLogin, settings.soulseekPassword, onChange = { login, password ->
             settings = settings.copy(soulseekLogin = login, soulseekPassword = password)
-        }
+        })
         Text(stringResource(R.string.proxy_section), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.proxy_hint), style = MaterialTheme.typography.bodySmall)
         Field(R.string.proxy_host, settings.proxyHost, onValueChange = { settings = settings.copy(proxyHost = it) })
@@ -69,9 +69,9 @@ fun SettingsScreen(
             settings =
                 settings.copy(proxyPort = it)
         })
-        Credentials(settings.proxyUser, settings.proxyPassword) { login, password ->
+        Credentials(settings.proxyUser, settings.proxyPassword, onChange = { login, password ->
             settings = settings.copy(proxyUser = login, proxyPassword = password)
-        }
+        })
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.seeding), style = MaterialTheme.typography.titleMedium)
