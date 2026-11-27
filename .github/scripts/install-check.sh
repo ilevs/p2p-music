@@ -218,7 +218,8 @@ type_into() {
   adb shell dumpsys input_method | grep -q "mInputShown=true" && adb shell input keyevent 4
   sleep 1
 }
-adb shell am force-stop "$package"
+# The tracker step put this album in the library, which plays it from the torrent: start clean.
+adb shell pm clear "$package"
 adb logcat -c
 adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
 sleep 10
