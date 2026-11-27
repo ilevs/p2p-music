@@ -26,7 +26,10 @@ struct Download {
 }
 
 fn string(env: &mut JNIEnv, value: &JString) -> String {
-    env.get_string(value).map(Into::into).unwrap_or_default()
+    match env.get_string(value) {
+        Ok(text) => text.into(),
+        Err(_) => String::new(),
+    }
 }
 
 fn java(env: &mut JNIEnv, value: &str) -> jstring {

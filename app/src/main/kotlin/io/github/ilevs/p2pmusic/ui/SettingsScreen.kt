@@ -99,9 +99,12 @@ private fun Credentials(
     login: String,
     password: String,
     onChange: (login: String, password: String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Field(R.string.login, login, onValueChange = { onChange(it, password) })
-    Field(R.string.password, password, isSecret = true, onValueChange = { onChange(login, it) })
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Field(R.string.login, login, onValueChange = { onChange(it, password) })
+        Field(R.string.password, password, isSecret = true, onValueChange = { onChange(login, it) })
+    }
 }
 
 @Composable

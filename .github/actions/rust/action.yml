@@ -3,11 +3,10 @@ description: Toolchain, Android targets and cargo-ndk for the Soulseek library i
 runs:
   using: composite
   steps:
-    - name: Install Android targets and cargo-ndk
+    # The toolchain and Android targets come from native/soulseek/rust-toolchain.toml on first use.
+    - name: Install cargo-ndk
       shell: bash
-      run: |
-        rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-        cargo install cargo-ndk --version 4.1.2 --locked
+      run: cargo install cargo-ndk --version 4.1.2 --locked
 
     - uses: Swatinem/rust-cache@v2
       with:
