@@ -11,7 +11,7 @@
   <string name="play">Играть</string>
   <string name="pause">Пауза</string>
   <string name="position">%1$s / %2$s</string>
-  <string name="stats">Старт: %1$s · Перемотка: %2$s · Пиры: %3$d · Скорость: %4$s</string>
+  <string name="stats">Старт: %1$s · Перемотка: %2$s · Пиры: %3$d · Скорость: %4$s · Трекеры: %5$d из %6$d · DHT: %7$d</string>
   <string name="seconds">%1$.1f с</string>
   <string name="not_measured">—</string>
   <string name="speed">%1$.1f МБ/с</string>

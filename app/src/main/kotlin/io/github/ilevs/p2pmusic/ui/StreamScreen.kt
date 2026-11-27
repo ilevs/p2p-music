@@ -147,7 +147,16 @@ private fun statsText(state: StreamState): String {
     val startup = state.startupMs?.let { stringResource(R.string.seconds, it / MS_PER_SECOND) } ?: notMeasured
     val seek = state.seekMs?.let { stringResource(R.string.seconds, it / MS_PER_SECOND) } ?: notMeasured
     val speed = stringResource(R.string.speed, state.downloadRate / BYTES_PER_MB)
-    return stringResource(R.string.stats, startup, seek, state.peers, speed)
+    return stringResource(
+        R.string.stats,
+        startup,
+        seek,
+        state.peers,
+        speed,
+        state.trackersUp,
+        state.trackers,
+        state.dhtNodes,
+    )
 }
 
 private fun playOrResume(player: Player) {
