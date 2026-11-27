@@ -12,6 +12,8 @@ interface SoulseekApi {
 
     fun isOnline(): Boolean
 
+    fun disconnect()
+
     /** One line per file: user, free slots, speed, size, path, tab-separated. */
     fun search(
         query: String,
@@ -51,6 +53,8 @@ object SoulseekNative : SoulseekApi {
     ): String?
 
     external override fun isOnline(): Boolean
+
+    external override fun disconnect()
 
     external override fun search(
         query: String,

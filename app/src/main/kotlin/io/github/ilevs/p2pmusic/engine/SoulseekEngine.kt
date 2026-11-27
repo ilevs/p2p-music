@@ -24,7 +24,7 @@ data class SoulseekFile(
     val speed: Int = 0,
 ) {
     /** The remote folder; Soulseek paths use backslashes. */
-    val folder: String get() = path.substringBeforeLast('\\', "").substringBeforeLast('/', "")
+    val folder: String get() = path.take(maxOf(path.lastIndexOf('\\'), path.lastIndexOf('/'), 0))
     val name: String get() = path.substringAfterLast('\\').substringAfterLast('/')
 }
 
@@ -92,6 +92,13 @@ class SoulseekEngine(
         downloads.clear()
     }
 
+    /** Logs out and stops the client's threads. */
+    @Synchronized
+    fun disconnect() {
+        api().disconnect()
+        downloads.clear()
+    }
+
     fun search(query: String): List<SoulseekFile> = parseSearch(api().search(query, SEARCH_MS))
 
     /** Starts [file] unless it is already on its way or on disk. Returns its download id, or 0 if done before. */
@@ -155,7 +162,7 @@ class SoulseekEngine(
 }
 
 // Names come from strangers: no separators, no "..", and short enough for the file system.
-private fun safeName(text: String): String =
+internal fun safeName(text: String): String =
     text
         .replace(UnsafeName, "_")
         .takeLast(MAX_NAME)

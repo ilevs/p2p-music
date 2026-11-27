@@ -74,6 +74,8 @@ class SoulseekEngineTest {
 
         override fun isOnline() = true
 
+        override fun disconnect() = Unit
+
         override fun search(
             query: String,
             timeoutMs: Long,

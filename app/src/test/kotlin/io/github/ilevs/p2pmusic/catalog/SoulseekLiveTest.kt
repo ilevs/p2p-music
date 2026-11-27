@@ -2,6 +2,7 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.awaitBytes
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -29,11 +30,12 @@ class SoulseekLiveTest {
         engine.connect(login, System.getenv("SOULSEEK_PASSWORD").orEmpty(), share = false)
         val loggedIn = System.currentTimeMillis()
         val album = Album("1", "The Dark Side of the Moon", "Pink Floyd", "1973")
-        val folders = soulseekFolders(album, engine.search("${album.artist} ${album.title}"))
+        val files = engine.search("${album.artist} ${album.title}")
+        val folders = soulseekFolders(album, files)
         val searched = System.currentTimeMillis()
         println("METRIC soulseek_login_ms=${loggedIn - start}")
         println("METRIC soulseek_search_ms=${searched - loggedIn}")
-        println("Soulseek: ${folders.size} folders with the album")
+        println("Soulseek: ${files.size} files, ${folders.size} folders with the album, e.g. ${files.take(3)}")
         assertTrue("No folder with the album", folders.isNotEmpty())
         val first = engine.race(folders.take(RACE_SIZE).map { it.first() }, RACE_MS)
         val raced = System.currentTimeMillis()
@@ -45,6 +47,10 @@ class SoulseekLiveTest {
         println("Soulseek: ${have / KB} KB of ${first.name}")
         engine.cancel(first)
     }
+
+    // The client's threads must stop before the JVM exits, or the test process dies with SIGSEGV.
+    @After
+    fun disconnect() = SoulseekEngine(temp.root).disconnect()
 
     private companion object {
         const val TIMEOUT_MS = 180_000L

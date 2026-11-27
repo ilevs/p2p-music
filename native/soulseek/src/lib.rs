@@ -99,6 +99,23 @@ pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_isOnl
     })
 }
 
+/// Logs out and stops the client's threads.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_disconnect<'a>(
+    _env: JNIEnv<'a>,
+    _this: JObject<'a>,
+) {
+    guard((), || {
+        let old = CLIENT
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(mut client) = old {
+            client.disconnect();
+        }
+    });
+}
+
 /// Searches for `timeout_ms`. One line per file: user, free slots, speed, size, path, tab-separated.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_search<'a>(
