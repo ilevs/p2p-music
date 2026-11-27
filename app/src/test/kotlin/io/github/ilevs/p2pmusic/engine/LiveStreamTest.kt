@@ -35,7 +35,7 @@ class LiveStreamTest {
                 .use { checkNotNull(it.body).string() }
         val name =
             checkNotNull(
-                Regex("ubuntu-[0-9.]+-live-server-amd64\\.iso\\.torrent").findAll(page).map { it.value }.maxOrNull(),
+                Regex("ubuntu-[0-9.]+-desktop-amd64\\.iso\\.torrent").findAll(page).map { it.value }.maxOrNull(),
             )
         val torrent = Request.Builder().url(RELEASE_PAGE + name).build()
         val bytes = client.newCall(torrent).execute().use { checkNotNull(it.body).bytes() }
@@ -59,7 +59,8 @@ class LiveStreamTest {
     }
 
     private companion object {
-        const val RELEASE_PAGE = "https://releases.ubuntu.com/noble/"
+        // shortcut: the 24.04 swarm thinned to one peer by late 2026; move to the next LTS when this one thins too.
+        const val RELEASE_PAGE = "https://releases.ubuntu.com/26.04/"
         const val TIMEOUT_MS = 180_000L
         const val STATUS_INTERVAL_MS = 5_000L
     }
