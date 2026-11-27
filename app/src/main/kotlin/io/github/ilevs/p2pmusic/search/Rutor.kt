@@ -5,6 +5,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import java.io.IOException
 import kotlin.math.pow
 
@@ -54,11 +55,16 @@ internal fun parseRutorSearch(html: String): List<SearchResult> =
                 title = link.text(),
                 category = "Rutor",
                 sizeBytes = parseSize(cells.getOrNull(cells.size - 2)?.text().orEmpty()),
-                seeds = row.selectFirst("span.green")?.text()?.trim()?.toIntOrNull() ?: 0,
-                leeches = row.selectFirst("span.red")?.text()?.trim()?.toIntOrNull() ?: 0,
+                seeds = row.number("span.green"),
+                leeches = row.number("span.red"),
             )
         }
     }
+
+private fun Element.number(css: String): Int {
+    val text = selectFirst(css)?.text().orEmpty()
+    return text.trim().toIntOrNull() ?: 0
+}
 
 /** "802.50 MB" (with a no-break space) to bytes; 0 when it is not a size. */
 internal fun parseSize(text: String): Long {
