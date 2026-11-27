@@ -35,14 +35,8 @@ class TorrentReader(
         }
         span = FileSpan(files.fileOffset(ref.fileIndex), files.fileSize(ref.fileIndex), info.pieceLength())
         path = files.filePath(ref.fileIndex, handle.savePath())
-        val wasIdle = handle.status().isFinished
         // Playing a file downloads all of it in the background; other files of the torrent stay untouched.
         handle.filePriority(ref.fileIndex, Priority.TOP_PRIORITY)
-        // With nothing selected the torrent announced itself as complete, and trackers send no seeds to a seed.
-        if (wasIdle) {
-            handle.forceReannounce()
-            handle.forceDHTAnnounce()
-        }
         // The tail holds ID3v1/APE tags and the M4A index; players read it right after the header.
         setDeadline(span.lastPiece, 0)
         if (position < span.size) moveWindow(span.pieceAt(position))
