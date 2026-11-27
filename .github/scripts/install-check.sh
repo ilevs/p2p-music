@@ -45,6 +45,12 @@ fail() {
   adb logcat -d -b crash
   adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession" | tail -60
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
+  adb shell ls -lR "/sdcard/Android/data/$package/files/torrent/downloads" | head -20
+  adb shell dumpsys media_session | grep -E "state=|error" | head -10
+  # Thread stacks show where playback is stuck; emulator images allow adb root.
+  adb root > /dev/null 2>&1; adb wait-for-device; sleep 2
+  adb shell kill -3 "$(adb shell pidof "$package")"; sleep 3
+  adb shell 'cat $(ls -t /data/anr/* | head -1)' | grep -A20 -E '^"(main|ExoPlayer|Loader|pool|DefaultDispatcher)' | head -200
   echo "::error::$1"
   exit 1
 }
