@@ -37,8 +37,8 @@ if ! adb shell pidof "$package" > /dev/null; then
 fi
 echo "Installed and running."
 
-# Play a track the way a user does: open a magnet, go to the player, tap the track. The album is
-# already on the device, so no peers are needed: the app checks the files and plays them.
+# Play a track the way a user does: paste a magnet, go to the player, tap the track. A seeder on
+# this host is the only peer: the app fetches the metadata from it, then streams the track.
 fail() {
   echo "::endgroup::"
   adb shell pidof "$package" || echo "The app is not running"
@@ -52,18 +52,18 @@ echo "::group::Play a track"
 here="$(dirname "$0")"
 work="$(mktemp -d)"
 hash="$(python3 "$here/make-test-torrent.py" "$work")"
-dir="/sdcard/Android/data/$package/files/torrent"
-adb shell mkdir -p "$dir/torrents" "$dir/downloads"
-adb push "$work/$hash.torrent" "$dir/torrents/"
-adb push "$work/data/." "$dir/downloads/"
+python3 "$here/seed.py" "$work/$hash.torrent" "$work/data" > seeder.log 2>&1 &
+trap 'kill %1 2>/dev/null; tail -5 seeder.log' EXIT
 adb shell am force-stop "$package"
 adb logcat -c
-adb shell am start -a android.intent.action.VIEW -d "magnet:?xt=urn:btih:$hash" "$package/.MainActivity"
+adb shell am start -a android.intent.action.VIEW -d "magnet:?xt=urn:btih:$hash\&x.pe=10.0.2.2:6881" "$package/.MainActivity"
 sleep 10
 python3 "$here/tap.py" "Плеер" || fail "No player tab"
-sleep 3
+for _ in $(seq 10); do
+  sleep 3
+  python3 "$here/tap.py" "Тишина" && break
+done || fail "No track on the player screen"
 adb exec-out screencap -p > screen-tracks.png
-python3 "$here/tap.py" "Тишина" || fail "No track on the player screen"
 sleep 10
 adb exec-out screencap -p > screen-playing.png
 echo "::endgroup::"

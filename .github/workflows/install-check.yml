@@ -96,6 +96,9 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Install the test seeder
+        run: sudo apt-get install -y python3-libtorrent
+
       - name: Install and launch on the emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
