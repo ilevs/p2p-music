@@ -32,7 +32,16 @@ class MusicBrainz(
     private val baseUrl: HttpUrl = "https://musicbrainz.org/ws/2/".toHttpUrl(),
     private val retryDelayMs: Long = 1_500,
 ) {
-    fun searchAlbums(query: String): List<Album> {
+    fun searchAlbums(query: String): List<Album> =
+        try {
+            fetchAlbums(query)
+        } catch (e: IOException) {
+            // Network errors such as "timeout" say nothing about where they came from.
+            if (e.message.orEmpty().startsWith("MusicBrainz")) throw e
+            throw IOException("MusicBrainz: ${e.message ?: e}", e)
+        }
+
+    private fun fetchAlbums(query: String): List<Album> {
         val url =
             baseUrl
                 .newBuilder()

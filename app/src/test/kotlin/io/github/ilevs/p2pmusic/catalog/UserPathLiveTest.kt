@@ -1,13 +1,17 @@
 package io.github.ilevs.p2pmusic.catalog
 
+import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.search.AllSources
 import io.github.ilevs.p2pmusic.search.Rutor
 import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import okhttp3.OkHttpClient
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.libtorrent4j.TorrentInfo
 
 /**
@@ -15,6 +19,9 @@ import org.libtorrent4j.TorrentInfo
  * release the app would pick on Rutor. Downloads no music; the install check proves playback.
  */
 class UserPathLiveTest {
+    @get:Rule
+    val temp = TemporaryFolder()
+
     @Test
     fun findsAReleaseForACatalogAlbum() {
         assumeTrue("LIVE_TESTS is not set", System.getenv("LIVE_TESTS") == "true")
@@ -33,5 +40,9 @@ class UserPathLiveTest {
         assertNotNull("No release with seeds for $album among $results", pick)
         val info = TorrentInfo.bdecode(source.torrentFile(checkNotNull(pick)))
         assertTrue(info.isValid && info.numFiles() > 0)
+
+        // The fallback when the .torrent host is blocked: the magnet from the search page, metadata from peers.
+        val handle = TorrentEngine(temp.newFolder()).openMagnet(pick.magnet)
+        assertEquals(info.infoHash(), handle.infoHash())
     }
 }

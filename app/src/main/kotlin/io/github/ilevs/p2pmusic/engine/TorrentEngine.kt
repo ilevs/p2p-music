@@ -198,3 +198,10 @@ fun trackerCounts(handle: TorrentHandle): Pair<Int, Int> {
     // The monitor keeps the vector reachable, so not freed, until its entries are read.
     return synchronized(entries) { entries.count { it.verified } to entries.size }
 }
+
+/** The info hash of [magnet], hex. Throws IllegalArgumentException for a malformed link. */
+fun magnetHash(magnet: String): String =
+    AddTorrentParams
+        .parseMagnetUri(magnet)
+        .infoHashes.best
+        .toHex()

@@ -15,6 +15,8 @@ data class SearchResult(
     val leeches: Int,
     /** Name of the [TorrentSource] that found it; set by [AllSources]. */
     val source: String = "",
+    /** A magnet link from the search page, when the tracker shows one. */
+    val magnet: String = "",
 )
 
 /** A built-in torrent tracker. Blocking calls: use them off the main thread. */
@@ -57,9 +59,20 @@ class AllSources(
         outcome: Result<List<SearchResult>>,
     ): String {
         val message = outcome.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "ничего не найдено"
-        return if (message.startsWith(source.name)) message else "${source.name}: $message"
+        return named(source, message)
     }
 
-    override fun torrentFile(result: SearchResult): ByteArray =
-        sources.first { it.name == result.source }.torrentFile(result)
+    private fun named(
+        source: TorrentSource,
+        message: String,
+    ) = if (message.startsWith(source.name)) message else "${source.name}: $message"
+
+    override fun torrentFile(result: SearchResult): ByteArray {
+        val source = sources.first { it.name == result.source }
+        return try {
+            source.torrentFile(result)
+        } catch (e: IOException) {
+            throw IOException(named(source, ".torrent не скачался: ${e.message ?: e}"), e)
+        }
+    }
 }

@@ -2,6 +2,7 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
+import io.github.ilevs.p2pmusic.engine.magnetHash
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.toJson
@@ -63,10 +64,16 @@ class CatalogController(
                     pickTorrent(album, exact.getOrDefault(emptyList()))
                         ?: pickTorrent(album, source.search(album.artist))
                         ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
-                val bytes = source.torrentFile(pick)
-                settings.addToLibrary(SavedAlbum(album, TorrentInfo.bdecode(bytes).infoHash().toHex()))
+                val bytes = runCatching { source.torrentFile(pick) }
+                // The .torrent host (d.rutor.info) can be blocked or slow while the search page works;
+                // the magnet from the search page needs only peers.
+                val magnet = pick.magnet.takeIf { bytes.isFailure && it.isNotEmpty() }
+                val hash = magnet?.let(::magnetHash) ?: TorrentInfo.bdecode(bytes.getOrThrow()).infoHash().toHex()
+                settings.addToLibrary(SavedAlbum(album, hash))
                 mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
-                stream.openHandle(album.title) { stream.engine.openTorrent(bytes) }
+                stream.openHandle(album.title) {
+                    magnet?.let(stream.engine::openMagnet) ?: stream.engine.openTorrent(bytes.getOrThrow())
+                }
             }
             null
         }
