@@ -125,7 +125,7 @@ class StreamController(
     ) {
         mutableState.update { StreamState(isLoading = true) }
         scope.launch {
-            runCatching { withContext(io) { listAudio(open()) } }
+            runCatching { withContext(io) { listAudio(open().also { hash = it.infoHash().toHex() }) } }
                 .onSuccess { (name, all) ->
                     val files = album?.let { albumFiles(it, all) } ?: all
                     mutableState.update { it.copy(torrentName = name, files = files, isLoading = false) }
@@ -221,6 +221,7 @@ class StreamController(
     suspend fun restore(saved: SavedAlbum? = null): MediaSession.MediaItemsWithStartPosition? {
         val spot = saved?.let { LastPlayed(it.hash, -1, 0L) } ?: settings.lastPlayed() ?: return null
         val (name, all) = withContext(io) { listAudio(engine.handle(spot.hash)) }
+        hash = spot.hash
         val files = saved?.let { albumFiles(it.album.title, all) } ?: all
         mutableState.update { StreamState(torrentName = name, files = files) }
         watchStats()
@@ -232,18 +233,6 @@ class StreamController(
         } else {
             MediaSession.MediaItemsWithStartPosition(queueItems(), index, spot.positionMs)
         }
-    }
-
-    private fun listAudio(handle: TorrentHandle): Pair<String, List<AudioFile>> {
-        hash = handle.infoHash().toHex()
-        val info = handle.torrentFile()
-        val storage = info.files()
-        val files =
-            (0 until storage.numFiles())
-                .filter { isAudioFile(storage.fileName(it)) }
-                .map { AudioFile(it, storage.filePath(it), storage.fileSize(it)) }
-                .sortedBy { it.name }
-        return info.name() to files
     }
 
     private fun watchStats() {
@@ -272,4 +261,16 @@ class StreamController(
                 }
             }
     }
+}
+
+/** The torrent's name and its audio files, sorted by path. */
+internal fun listAudio(handle: TorrentHandle): Pair<String, List<AudioFile>> {
+    val info = handle.torrentFile()
+    val storage = info.files()
+    val files =
+        (0 until storage.numFiles())
+            .filter { isAudioFile(storage.fileName(it)) }
+            .map { AudioFile(it, storage.filePath(it), storage.fileSize(it)) }
+            .sortedBy { it.name }
+    return info.name() to files
 }
