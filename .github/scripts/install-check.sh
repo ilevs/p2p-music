@@ -43,7 +43,7 @@ fail() {
   echo "::endgroup::"
   adb shell pidof "$package" || echo "The app is not running"
   adb logcat -d -b crash
-  adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession" | tail -60
+  adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession|P2pMusic" | tail -60
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
   adb shell ls -lR "/sdcard/Android/data/$package/files/torrent/downloads" | head -20
   adb shell dumpsys media_session | grep -E "state=|error" | head -10
