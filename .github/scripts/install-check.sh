@@ -48,7 +48,7 @@ fail() {
   adb logcat -d | grep -E -A3 "Playback error|Caused by" | grep -v "^--" | head -40
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
   # The stats line (peers, trackers, DHT) is at the bottom of the player list.
-  adb shell input swipe 160 500 160 100; sleep 1
+  for _ in 1 2 3 4 5; do adb shell input swipe 160 500 160 100 200; done; sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null; adb shell cat /sdcard/ui.xml | grep -o 'text="Старт[^"]*"'
   adb shell ls -lR "/sdcard/Android/data/$package/files/torrent/downloads" | head -20
   adb shell dumpsys media_session | grep -E "state=|error" | head -10
