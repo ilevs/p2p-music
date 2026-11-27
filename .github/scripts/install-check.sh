@@ -143,13 +143,13 @@ adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
 sleep 10
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-# Not the full title, or tapping it would hit the search field.
-adb shell input text "Pink%sFloyd%sDark%sSide"
+adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 for _ in $(seq 10); do
   sleep 3
-  python3 "$here/tap.py" "The Dark Side of the Moon" && break
-done || fail "The catalog shows no album The Dark Side of the Moon"
+  # The row's "artist · year" line: the catalog also lists tributes named after the album.
+  python3 "$here/tap.py" "Pink Floyd · 1973" && break
+done || fail "The catalog shows no Pink Floyd album of 1973"
 for _ in $(seq 60); do
   sleep 3
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null

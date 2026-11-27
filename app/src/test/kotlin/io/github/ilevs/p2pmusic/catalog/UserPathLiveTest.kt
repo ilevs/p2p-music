@@ -18,7 +18,11 @@ class UserPathLiveTest {
     @Test
     fun findsAReleaseForACatalogAlbum() {
         assumeTrue("LIVE_TESTS is not set", System.getenv("LIVE_TESTS") == "true")
-        val album = MusicBrainz(OkHttpClient()).searchAlbums("Pink Floyd The Dark Side of the Moon").first()
+        // The catalog ranks tributes too; the user taps the one by Pink Floyd.
+        val album =
+            MusicBrainz(OkHttpClient())
+                .searchAlbums("Pink Floyd The Dark Side of the Moon")
+                .first { it.artist == "Pink Floyd" }
         val client = trackerHttpClient(proxy = null)
         val source = AllSources(listOf(Rutor(client = { client })))
 
