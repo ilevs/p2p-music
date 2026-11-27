@@ -134,6 +134,34 @@ done || fail "No metadata or fewer than 5 peers from the live swarm"
 echo "$stats"
 adb exec-out screencap -p > screen-live.png
 echo "::endgroup::"
+# The user's path on the real sites: find an album in the catalog, tap it, and the app picks a release on
+# the trackers and plays it. Downloads part of a commercial album, which ilia allowed on 2026-11-27.
+echo "::group::Find an album and play it"
+adb shell am force-stop "$package"
+adb logcat -c
+adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
+sleep 10
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for _ in $(seq 10); do
+  sleep 3
+  # The row's "artist · year" line: the catalog also lists tributes named after the album.
+  python3 "$here/tap.py" "Pink Floyd · 1973" && break
+done || fail "The catalog shows no Pink Floyd album of 1973"
+for _ in $(seq 60); do
+  sleep 3
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+  # Playback starts on the player tab; an error from the trackers stays on the search screen.
+  python3 "$here/tap.py" "Плеер" > /dev/null || true
+done || {
+  python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  fail "The album found in the catalog does not play"
+}
+adb exec-out screencap -p > screen-album.png
+echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
   adb logcat -d -b crash
   adb logcat -d | grep -E "AndroidRuntime|$package|ExoPlayer|MediaSession" | tail -80
@@ -174,19 +202,33 @@ for _ in $(seq 10); do
   sleep 3
   python3 "$here/tap.py" "Pink Floyd · 1973" && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
-started=$(date +%s)
-for _ in $(seq 60); do
-  sleep 3
+tapped=$(date +%s)
+playing=
+for _ in $(seq 180); do
+  sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+  if adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"'; then
+    playing=yes
+    break
+  fi
   python3 "$here/tap.py" "Плеер" > /dev/null || true
-done || {
+done
+# "Пауза" shows only while the player renders audio; the position must also move.
+if [ -n "$playing" ]; then
+  echo "METRIC soulseek_album_tap_to_sound_s=$(( $(date +%s) - tapped ))"
+  sleep 6
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  position="$(adb shell cat /sdcard/ui.xml | grep -o 'text="[0-9]*:[0-9]* / [^"]*"' | head -1)"
+  echo "Position after 6 s: $position"
+  if [ -z "$position" ] || echo "$position" | grep -q 'text="0:0[0-2] /'; then playing=; fi
+fi
+if [ -z "$playing" ]; then
+  adb exec-out screencap -p > screen-soulseek.png
+  echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -60
   python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*Soulseek[^"]*"'
-  adb exec-out screencap -p > screen-soulseek.png
   fail "The album does not play from Soulseek"
-}
-echo "Soulseek album plays $(( $(date +%s) - started )) s after the tap."
+fi
 adb exec-out screencap -p > screen-soulseek.png
 adb shell pidof "$package" > /dev/null || fail "The app died while playing from Soulseek"
 echo "::endgroup::"

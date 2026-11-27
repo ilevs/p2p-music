@@ -27,8 +27,9 @@ class AllSourcesTest {
 
     @Test
     fun reportsTheErrorWhenNothingIsFound() {
-        val error = assertThrows(IOException::class.java) { AllSources(listOf(blocked)).search("Кино") }
-        assertEquals("Cloudflare", error.message)
+        val empty = FakeSource("Rutor") { emptyList() }
+        val error = assertThrows(IOException::class.java) { AllSources(listOf(blocked, empty)).search("Кино") }
+        assertEquals("RuTracker: Cloudflare; Rutor: ничего не найдено", error.message)
     }
 
     @Test

@@ -6,6 +6,7 @@ import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.playback.AudioFile
 import io.github.ilevs.p2pmusic.playback.StreamController
+import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.toJson
 import io.github.ilevs.p2pmusic.toSavedAlbum
@@ -81,10 +82,12 @@ class CatalogController(
         }
     }
 
-    // A release of the album itself, else a discography found by the artist alone.
-    private fun pickRelease(album: Album) =
-        pickTorrent(album, source.search("${album.artist} ${album.title}"))
-            ?: pickTorrent(album, source.search(album.artist))
+    // A release of the album itself, else a discography found by the artist alone;
+    // a failed first search still tries the second, which reports the error.
+    private fun pickRelease(album: Album): SearchResult? {
+        val exact = runCatching { source.search("${album.artist} ${album.title}") }
+        return pickTorrent(album, exact.getOrDefault(emptyList())) ?: pickTorrent(album, source.search(album.artist))
+    }
 
     /**
      * Races the first track of the best few Soulseek users that have [album]; the winner sends the rest of the

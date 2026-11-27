@@ -31,14 +31,18 @@ class SoulseekLiveTest {
         val album = Album("1", "The Dark Side of the Moon", "Pink Floyd", "1973")
         val folders = soulseekFolders(album, engine.search("${album.artist} ${album.title}"))
         val searched = System.currentTimeMillis()
-        println("Soulseek: login ${loggedIn - start} ms, search ${searched - loggedIn} ms, ${folders.size} folders")
+        println("METRIC soulseek_login_ms=${loggedIn - start}")
+        println("METRIC soulseek_search_ms=${searched - loggedIn}")
+        println("Soulseek: ${folders.size} folders with the album")
         assertTrue("No folder with the album", folders.isNotEmpty())
         val first = engine.race(folders.take(RACE_SIZE).map { it.first() }, RACE_MS)
         val raced = System.currentTimeMillis()
-        println("Soulseek: first bytes from ${first?.user} after ${raced - searched} ms")
+        println("METRIC soulseek_first_bytes_ms=${raced - searched}")
+        println("Soulseek: first bytes from ${first?.user}")
         checkNotNull(first) { "None of ${folders.take(RACE_SIZE).map { it[0].user }} started sending" }
         val have = engine.awaitBytes(first, BYTES, RACE_MS)
-        println("Soulseek: ${have / KB} KB of ${first.name} after ${System.currentTimeMillis() - searched} ms")
+        println("METRIC soulseek_256kb_ms=${System.currentTimeMillis() - searched}")
+        println("Soulseek: ${have / KB} KB of ${first.name}")
         engine.cancel(first)
     }
 

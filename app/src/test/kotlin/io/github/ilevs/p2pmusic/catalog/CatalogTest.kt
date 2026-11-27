@@ -25,6 +25,17 @@ class CatalogTest {
     }
 
     @Test
+    fun retriesWhenRateLimited() {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(MockResponse().setBody(RELEASE_GROUPS))
+        val albums = MusicBrainz(OkHttpClient(), server.url("/ws/2/"), retryDelayMs = 0).searchAlbums("кино")
+        assertEquals(1, albums.size)
+        assertEquals(2, server.requestCount)
+        server.shutdown()
+    }
+
+    @Test
     fun picksTheAlbumOverADiscographyAndSkipsDeadReleases() {
         val album = Album("1", "Группа крови", "Кино", "1988")
         val discography = result("1", "Кино - Дискография (1982-1990) MP3", seeds = 90)
