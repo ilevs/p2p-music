@@ -12,6 +12,8 @@ import java.io.IOException
 private const val USER_AGENT = "P2PMusic/0.1 ( https://github.com/ilevs/p2p-music )"
 private const val PAGE_SIZE = "25"
 private const val YEAR_LENGTH = 4
+private const val RATE_LIMITED = 503
+private const val ATTEMPTS = 3
 
 /** An album (MusicBrainz release group). */
 data class Album(
@@ -28,6 +30,7 @@ val Album.coverUrl: String get() = "https://coverartarchive.org/release-group/$i
 class MusicBrainz(
     private val client: OkHttpClient,
     private val baseUrl: HttpUrl = "https://musicbrainz.org/ws/2/".toHttpUrl(),
+    private val retryDelayMs: Long = 1_500,
 ) {
     fun searchAlbums(query: String): List<Album> {
         val url =
@@ -44,6 +47,14 @@ class MusicBrainz(
                 .url(url)
                 .header("User-Agent", USER_AGENT)
                 .build()
+        // MusicBrainz answers 503 to more than one request a second from an address; wait and retry.
+        repeat(ATTEMPTS - 1) {
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) return parseReleaseGroups(checkNotNull(response.body).string())
+                if (response.code != RATE_LIMITED) throw IOException("MusicBrainz: HTTP ${response.code}")
+            }
+            Thread.sleep(retryDelayMs)
+        }
         val json =
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("MusicBrainz: HTTP ${response.code}")
