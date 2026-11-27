@@ -59,10 +59,12 @@ here="$(dirname "$0")"
 work="$(mktemp -d)"
 hash="$(python3 "$here/make-test-torrent.py" "$work")"
 python3 "$here/seed.py" "$work/$hash.torrent" "$work/data" > seeder.log 2>&1 &
+# adb carries the peer connection; the emulator's NAT left dead connections open on the host side.
+adb reverse tcp:6882 tcp:6882
 trap 'kill %1 2>/dev/null; tail -5 seeder.log' EXIT
 adb shell am force-stop "$package"
 adb logcat -c
-adb shell am start -a android.intent.action.VIEW -d "magnet:?xt=urn:btih:$hash\&x.pe=10.0.2.2:6881" "$package/.MainActivity"
+adb shell am start -a android.intent.action.VIEW -d "magnet:?xt=urn:btih:$hash\&x.pe=127.0.0.1:6882" "$package/.MainActivity"
 sleep 10
 python3 "$here/tap.py" "Плеер" || fail "No player tab"
 for _ in $(seq 10); do

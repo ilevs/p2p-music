@@ -1,6 +1,6 @@
 """Seeds a .torrent to the emulator, slowly, so the app streams pieces as they arrive.
 
-Usage: seed.py <file.torrent> <data dir>. The emulator reaches this host at 10.0.2.2:6881.
+Usage: seed.py <file.torrent> <data dir>. The emulator reaches it at 127.0.0.1:6882 through adb reverse.
 """
 import sys
 import time
@@ -8,13 +8,11 @@ import time
 import libtorrent as lt
 
 session = lt.session({
-    "listen_interfaces": "0.0.0.0:6881",
+    "listen_interfaces": "127.0.0.1:6882",
     "enable_dht": False,
     "enable_lsd": False,
     "enable_upnp": False,
     "enable_natpmp": False,
-    # The emulator's NAT can leave a dead connection open here; let the app connect again from the same address.
-    "allow_multiple_connections_per_ip": True,
     # 64 KB/s: the track (16 KB/s of audio) arrives while it plays, piece by piece.
     "upload_rate_limit": 65536,
 })
