@@ -21,4 +21,7 @@ while True:
     for handle in session.get_torrents():
         status = handle.status()
         print(f"seeder: {status.state} peers={status.num_peers} sent={status.total_upload}", flush=True)
+        for peer in handle.get_peer_info():
+            flags = [name for name in ("remote_interested", "choked") if peer.flags & getattr(lt.peer_info, name)]
+            print(f"  peer {peer.ip} {peer.client} {flags} type={peer.connection_type} down={peer.total_download}", flush=True)
     time.sleep(5)
