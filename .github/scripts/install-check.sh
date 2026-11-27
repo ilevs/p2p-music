@@ -106,6 +106,8 @@ sleep 10
 python3 "$here/tap.py" "Плеер" || fail "No player tab"
 for _ in $(seq 30); do
   sleep 3
+  # The stats line sits below the player and can be off a small screen.
+  adb shell input swipe 160 500 160 100 100
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   stats="$(adb shell cat /sdcard/ui.xml | grep -o 'text="Старт[^"]*"')"
   peers="$(echo "$stats" | grep -o 'Пиры: [0-9]*' | grep -o '[0-9]*')"
