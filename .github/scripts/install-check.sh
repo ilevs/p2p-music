@@ -39,6 +39,15 @@ echo "Installed and running."
 
 # Play a track the way a user does: open a magnet, go to the player, tap the track. The album is
 # already on the device, so no peers are needed: the app checks the files and plays them.
+fail() {
+  echo "::endgroup::"
+  adb shell pidof "$package" || echo "The app is not running"
+  adb logcat -d -b crash
+  adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession" | tail -60
+  echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
+  echo "::error::$1"
+  exit 1
+}
 echo "::group::Play a track"
 here="$(dirname "$0")"
 work="$(mktemp -d)"
@@ -51,10 +60,10 @@ adb shell am force-stop "$package"
 adb logcat -c
 adb shell am start -a android.intent.action.VIEW -d "magnet:?xt=urn:btih:$hash" "$package/.MainActivity"
 sleep 10
-python3 "$here/tap.py" "Плеер"
+python3 "$here/tap.py" "Плеер" || fail "No player tab"
 sleep 3
 adb exec-out screencap -p > screen-tracks.png
-python3 "$here/tap.py" "Тишина" || { adb shell uiautomator dump /dev/tty; echo "::error::No track on the player screen"; exit 1; }
+python3 "$here/tap.py" "Тишина" || fail "No track on the player screen"
 sleep 10
 adb exec-out screencap -p > screen-playing.png
 echo "::endgroup::"
