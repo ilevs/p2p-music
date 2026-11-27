@@ -139,20 +139,30 @@ echo "::endgroup::"
 echo "::group::Find an album and play it"
 adb shell am force-stop "$package"
 adb logcat -c
+# Seconds since $2 for the step $1 of the user's path, into the job summary. Rough: a screen dump takes seconds.
+metric() {
+  echo "METRIC $1=$(($(date +%s) - $2))" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+}
+launched=$(date +%s)
 adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
-sleep 10
-python3 "$here/tap.py" "Поиск" || fail "No search tab"
+for _ in $(seq 20); do
+  python3 "$here/tap.py" "Поиск" && break
+  sleep 1
+done || fail "No search tab"
+metric launch_to_ui_s "$launched"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
 python3 "$here/tap.py" "Найти" || fail "No search button"
-for _ in $(seq 10); do
-  sleep 3
+searched=$(date +%s)
+for _ in $(seq 20); do
+  sleep 1
   # The row's "artist · year" line: the catalog also lists tributes named after the album.
   python3 "$here/tap.py" "Pink Floyd · 1973" && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
+metric search_to_albums_s "$searched"
 tapped=$(date +%s)
-for _ in $(seq 60); do
-  sleep 3
+for _ in $(seq 90); do
+  sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
   # Playback starts on the player tab; an error from the trackers stays on the search screen.
@@ -161,8 +171,8 @@ done || {
   python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   fail "The album found in the catalog does not play"
 }
-# Rough, in steps of the poll above; enough to see a regression between builds.
-echo "METRIC album_tap_to_sound_s=$(($(date +%s) - tapped))" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+metric album_tap_to_sound_s "$tapped"
+metric launch_to_sound_s "$launched"
 adb exec-out screencap -p > screen-album.png
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
