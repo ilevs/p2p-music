@@ -33,6 +33,11 @@ jobs:
       - name: ktlint
         run: ./gradlew ktlintCheck --stacktrace
 
+      - name: Rust format and clippy
+        if: ${{ !cancelled() }}
+        working-directory: native/soulseek
+        run: cargo fmt --check && cargo clippy --release -- -D warnings -W clippy::pedantic
+
       - name: detekt
         if: ${{ !cancelled() }}
         run: ./gradlew detekt --stacktrace
