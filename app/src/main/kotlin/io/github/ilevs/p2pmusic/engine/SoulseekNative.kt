@@ -20,6 +20,9 @@ interface SoulseekApi {
         timeoutMs: Long,
     ): String
 
+    /** The answers to a search started by [search] so far, in the same format. */
+    fun results(query: String): String
+
     /** The id of a queued download into [dir], or [FAILED]. */
     fun download(
         username: String,
@@ -60,6 +63,8 @@ object SoulseekNative : SoulseekApi {
         query: String,
         timeoutMs: Long,
     ): String
+
+    external override fun results(query: String): String
 
     external override fun download(
         username: String,

@@ -8,7 +8,8 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 private const val SCHEME = "soulseek://"
-private const val SEARCH_MS = 5_000L
+private const val SEARCH_MS = 15_000L
+private const val SEARCH_POLL_MS = 250L
 private const val POLL_MS = 100L
 private const val LISTEN_PORT = 2234
 private const val FIELDS = 5
@@ -99,7 +100,23 @@ class SoulseekEngine(
         downloads.clear()
     }
 
-    fun search(query: String): List<SoulseekFile> = parseSearch(api().search(query, SEARCH_MS))
+    /**
+     * Searches until the answers so far are [enough] or [SEARCH_MS] pass: users behind NAT answer through the
+     * server, the first of them about five seconds in, so a fixed short window finds nothing.
+     */
+    fun search(
+        query: String,
+        enough: (List<SoulseekFile>) -> Boolean,
+    ): List<SoulseekFile> {
+        api().search(query, 0)
+        val deadline = System.currentTimeMillis() + SEARCH_MS
+        var files = emptyList<SoulseekFile>()
+        while (System.currentTimeMillis() < deadline && !enough(files)) {
+            Thread.sleep(SEARCH_POLL_MS)
+            files = parseSearch(api().results(query))
+        }
+        return files
+    }
 
     /** Starts [file] unless it is already on its way or on disk. Returns its download id, or 0 if done before. */
     @Synchronized

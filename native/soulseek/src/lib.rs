@@ -116,7 +116,26 @@ pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_disco
     });
 }
 
-/// Searches for `timeout_ms`. One line per file: user, free slots, speed, size, path, tab-separated.
+/// One line per file: user, free slots, speed, size, path, tab-separated.
+fn lines(results: Vec<soulseek_rs::SearchResult>) -> String {
+    let mut out = String::new();
+    for result in results {
+        for file in &result.files {
+            // A path with a tab or newline would break the format; such files are rare, skip them.
+            if file.name.contains(['\t', '\n']) || result.username.contains(['\t', '\n']) {
+                continue;
+            }
+            let _ = writeln!(
+                out,
+                "{}\t{}\t{}\t{}\t{}",
+                result.username, result.slots, result.speed, file.size, file.name
+            );
+        }
+    }
+    out
+}
+
+/// Starts a search and collects answers for `timeout_ms` (0: return at once). Returns them, see `lines`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_search<'a>(
     mut env: JNIEnv<'a>,
@@ -125,7 +144,7 @@ pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_searc
     timeout_ms: jlong,
 ) -> jstring {
     let query = string(&mut env, &query);
-    let lines = guard(String::new(), || {
+    let found = guard(String::new(), || {
         let Ok(slot) = CLIENT.read() else {
             return String::new();
         };
@@ -133,23 +152,30 @@ pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_searc
             return String::new();
         };
         let timeout = Duration::from_millis(u64::try_from(timeout_ms).unwrap_or(0));
-        let mut out = String::new();
-        for result in client.search(&query, timeout).unwrap_or_default() {
-            for file in &result.files {
-                // A path with a tab or newline would break the format; such files are rare, skip them.
-                if file.name.contains(['\t', '\n']) || result.username.contains(['\t', '\n']) {
-                    continue;
-                }
-                let _ = writeln!(
-                    out,
-                    "{}\t{}\t{}\t{}\t{}",
-                    result.username, result.slots, result.speed, file.size, file.name
-                );
-            }
-        }
-        out
+        lines(client.search(&query, timeout).unwrap_or_default())
     });
-    java(&mut env, &lines)
+    java(&mut env, &found)
+}
+
+/// The answers to `query` so far: peers behind NAT answer seconds later, so Kotlin polls this.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ilevs_p2pmusic_engine_SoulseekNative_results<'a>(
+    mut env: JNIEnv<'a>,
+    _this: JObject<'a>,
+    query: JString<'a>,
+) -> jstring {
+    let query = string(&mut env, &query);
+    let found = guard(String::new(), || {
+        CLIENT
+            .read()
+            .ok()
+            .and_then(|slot| {
+                slot.as_ref()
+                    .map(|client| lines(client.get_search_results(&query)))
+            })
+            .unwrap_or_default()
+    });
+    java(&mut env, &found)
 }
 
 /// Queues `filename` from `username` into `dir` (as `<basename>.part`, renamed when done). Returns its id, or -2.

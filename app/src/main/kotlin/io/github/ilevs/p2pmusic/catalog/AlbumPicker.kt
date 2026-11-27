@@ -48,6 +48,13 @@ internal fun soulseekFolders(
         .distinctBy { it[0].user }
 }
 
+/** Enough answers to start racing: that many users with the album and a free slot. */
+internal fun enoughToRace(
+    album: Album,
+    files: List<SoulseekFile>,
+    users: Int,
+): Boolean = soulseekFolders(album, files).count { it[0].freeSlots > 0 } >= users
+
 private val NonWord = Regex("[^\\p{L}\\p{N}]+")
 
 private fun normalize(text: String): String = " " + text.lowercase().replace(NonWord, " ").trim() + " "

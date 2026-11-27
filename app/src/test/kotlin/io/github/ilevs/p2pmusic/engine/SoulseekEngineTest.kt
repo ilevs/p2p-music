@@ -81,6 +81,8 @@ class SoulseekEngineTest {
             timeoutMs: Long,
         ) = ""
 
+        override fun results(query: String) = ""
+
         override fun download(
             username: String,
             filename: String,

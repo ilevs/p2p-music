@@ -98,7 +98,11 @@ class CatalogController(
         why: String,
     ) {
         val soulseek = connectSoulseek(why)
-        val folders = soulseekFolders(album, soulseek.search("${album.artist} ${album.title}"))
+        val folders =
+            soulseekFolders(
+                album,
+                soulseek.search("${album.artist} ${album.title}") { enoughToRace(album, it, RACE_SIZE) },
+            )
         if (folders.isEmpty()) throw IOException("$why; в Soulseek «${album.title}» тоже нет")
         val tracks =
             folders

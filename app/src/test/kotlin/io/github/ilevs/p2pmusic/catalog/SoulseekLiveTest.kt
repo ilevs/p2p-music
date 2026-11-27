@@ -30,7 +30,7 @@ class SoulseekLiveTest {
         engine.connect(login, System.getenv("SOULSEEK_PASSWORD").orEmpty(), share = false)
         val loggedIn = System.currentTimeMillis()
         val album = Album("1", "The Dark Side of the Moon", "Pink Floyd", "1973")
-        val files = engine.search("${album.artist} ${album.title}")
+        val files = engine.search("${album.artist} ${album.title}") { enoughToRace(album, it, RACE_SIZE) }
         val folders = soulseekFolders(album, files)
         val searched = System.currentTimeMillis()
         println("METRIC soulseek_login_ms=${loggedIn - start}")
