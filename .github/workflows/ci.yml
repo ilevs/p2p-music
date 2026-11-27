@@ -68,12 +68,14 @@ jobs:
         run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Print the Soulseek log and JVM crash reports
-        if: ${{ failure() }}
+        if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/soulseek.log"
           wc -l "$log" || true
-          grep -iE "exclud|search|connecttopeer|pierce|peer address|error|warn" "$log" | cut -c1-300 | head -60 || true
-          head -40 "$log" | cut -c1-300 || true
+          # The transfer of the race winner: requests, queue answers, the file connection, first bytes.
+          grep -vE "Connection refused|disconnect$|child limit|Parent " "$log" \
+            | grep -iE "download|transfer|queue|upload|pierce|connecttopeer|F connection|file conn|offset|progress|fail|denied|error" \
+            | cut -c1-260 | head -120 || true
           for f in $(find "$GITHUB_WORKSPACE" /tmp "$HOME" -name 'hs_err_pid*.log' 2>/dev/null); do
             echo "== $f"; grep -A12 -E "^# (Problematic frame|C  \[)|^Current thread|^Native frames" "$f" | head -60
           done
