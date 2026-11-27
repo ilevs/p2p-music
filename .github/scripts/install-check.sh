@@ -161,16 +161,24 @@ for _ in $(seq 20); do
 done || fail "The catalog shows no Pink Floyd album of 1973"
 metric search_to_albums_s "$searched"
 tapped=$(date +%s)
+playing=
 for _ in $(seq 90); do
   sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+  if adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"'; then
+    playing=yes
+    break
+  fi
   # Playback starts on the player tab; an error from the trackers stays on the search screen.
   python3 "$here/tap.py" "Плеер" > /dev/null || true
-done || {
+done
+# Not "done || fail": a loop that runs out ends with the status of its last command, which is 0 here.
+if [ -z "$playing" ]; then
+  adb exec-out screencap -p > screen-album.png
+  echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -60
   python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   fail "The album found in the catalog does not play"
-}
+fi
 metric album_tap_to_sound_s "$tapped"
 metric launch_to_sound_s "$launched"
 adb exec-out screencap -p > screen-album.png
