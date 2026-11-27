@@ -89,15 +89,29 @@ play_track "magnet:?xt=urn:btih:$hash\&x.pe=127.0.0.1:6882" "Тишина" 10
 adb exec-out screencap -p > screen-playing.png
 echo "::endgroup::"
 
-# A CC0 album from the Internet Archive: real peers and web seeds from the internet. The .torrent goes
-# into the app's cache, as after a RuTracker download; the magnet then opens it.
-echo "::group::Play a track from a live swarm"
-curl -sSfL --retry 3 -o "$work/live.torrent" \
-  https://archive.org/download/OpenGoldbergVariations/OpenGoldbergVariations_archive.torrent
-read -r live_hash live_track < <(python3 "$here/torrent-info.py" "$work/live.torrent")
-echo "Torrent $live_hash, first track $live_track"
-adb push "$work/live.torrent" "/sdcard/Android/data/$package/files/torrent/torrents/$live_hash.torrent"
-play_track "magnet:?xt=urn:btih:$live_hash" "${live_track%.*}" 30
+# Ubuntu's swarm: thousands of real peers from the internet, legal. The magnet carries no metadata, so the
+# file list (an ISO, no audio) appears only after peers sent it; then the stats line counts the peers.
+# A free music torrent with real peers was not found: archive.org albums have only web seeds.
+echo "::group::Fetch metadata from a live swarm"
+page=https://releases.ubuntu.com/26.04/
+name="$(curl -sSfL --retry 3 "$page" | grep -o 'ubuntu-[0-9.]*-desktop-amd64\.iso\.torrent' | sort -V | tail -1)"
+curl -sSfL --retry 3 -o "$work/live.torrent" "$page$name"
+live_hash="$(python3 -c 'import sys, libtorrent as lt; print(lt.torrent_info(sys.argv[1]).info_hash())' "$work/live.torrent")"
+echo "Torrent $name $live_hash"
+adb shell am force-stop "$package"
+adb logcat -c
+adb shell am start -a android.intent.action.VIEW \
+  -d "magnet:?xt=urn:btih:$live_hash\&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce" "$package/.MainActivity"
+sleep 10
+python3 "$here/tap.py" "Плеер" || fail "No player tab"
+for _ in $(seq 30); do
+  sleep 3
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  stats="$(adb shell cat /sdcard/ui.xml | grep -o 'text="Старт[^"]*"')"
+  peers="$(echo "$stats" | grep -o 'Пиры: [0-9]*' | grep -o '[0-9]*')"
+  adb shell cat /sdcard/ui.xml | grep -q 'text="В раздаче нет аудиофайлов"' && [ "${peers:-0}" -ge 5 ] && break
+done || fail "No metadata or fewer than 5 peers from the live swarm"
+echo "$stats"
 adb exec-out screencap -p > screen-live.png
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
