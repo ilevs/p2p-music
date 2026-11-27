@@ -15,7 +15,7 @@ session = lt.session({
     "enable_natpmp": False,
     # The emulator's NAT can leave a dead connection open here; let the app connect again from the same address.
     "allow_multiple_connections_per_ip": True,
-    # A phone on mobile data gets a track slower than it plays; 64 KB/s makes the player wait for pieces.
+    # 64 KB/s: the track (16 KB/s of audio) arrives while it plays, piece by piece.
     "upload_rate_limit": 65536,
 })
 session.add_torrent({"ti": lt.torrent_info(sys.argv[1]), "save_path": sys.argv[2]})
