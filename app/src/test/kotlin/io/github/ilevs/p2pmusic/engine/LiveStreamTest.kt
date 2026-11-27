@@ -7,7 +7,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import org.libtorrent4j.AnnounceEntry
 import org.libtorrent4j.TorrentInfo
 import kotlin.concurrent.thread
 
@@ -51,7 +50,7 @@ class LiveStreamTest {
                             val status = handle.status()
                             println(
                                 "${status.state()} peers=${status.numPeers()} seeds=${status.numSeeds()} " +
-                                    "rate=${status.downloadRate()} trackers=${handle.trackers().map(::trackerState)} " +
+                                    "rate=${status.downloadRate()} trackers up/all=${trackerCounts(handle)} " +
                                     "web seeds=${handle.urlSeeds()}",
                             )
                         }
@@ -116,7 +115,3 @@ private fun readSome(
     }
 
 private const val READ_BYTES = 64 * 1024
-
-// Whether each tracker ever answered, to tell a refused announce from an empty swarm.
-// Not endpoints(): its elements point into a freed native vector and crashed the test JVM.
-private fun trackerState(entry: AnnounceEntry): String = "${entry.url()} verified=${entry.isVerified}"

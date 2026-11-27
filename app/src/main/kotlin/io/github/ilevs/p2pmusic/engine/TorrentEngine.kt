@@ -188,3 +188,13 @@ class TorrentEngine(
         return Vectors.byte_vector2bytes(libtorrent.write_torrent_file_buf_ex(params.swig()))
     }
 }
+
+/**
+ * Trackers of [handle] that ever answered, and all of them. Not TorrentHandle.trackers(): its entries
+ * point into a native vector the GC may free while they are read, which crashed the JVM.
+ */
+fun trackerCounts(handle: TorrentHandle): Pair<Int, Int> {
+    val entries = handle.swig().trackers()
+    // The monitor keeps the vector reachable, so not freed, until its entries are read.
+    return synchronized(entries) { entries.count { it.verified } to entries.size }
+}
