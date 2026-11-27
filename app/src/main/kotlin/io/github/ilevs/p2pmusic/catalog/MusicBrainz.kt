@@ -12,7 +12,6 @@ import java.io.IOException
 private const val USER_AGENT = "P2PMusic/0.1 ( https://github.com/ilevs/p2p-music )"
 private const val PAGE_SIZE = "25"
 private const val YEAR_LENGTH = 4
-private const val RATE_LIMITED = 503
 private const val ATTEMPTS = 3
 
 /** An album (MusicBrainz release group). */
@@ -32,7 +31,16 @@ class MusicBrainz(
     private val baseUrl: HttpUrl = "https://musicbrainz.org/ws/2/".toHttpUrl(),
     private val retryDelayMs: Long = 1_500,
 ) {
-    fun searchAlbums(query: String): List<Album> {
+    fun searchAlbums(query: String): List<Album> =
+        try {
+            fetchAlbums(query)
+        } catch (e: IOException) {
+            // Network errors such as "timeout" say nothing about where they came from.
+            if (e.message.orEmpty().startsWith("MusicBrainz")) throw e
+            throw IOException("MusicBrainz: ${e.message ?: e}", e)
+        }
+
+    private fun fetchAlbums(query: String): List<Album> {
         val url =
             baseUrl
                 .newBuilder()
@@ -47,21 +55,25 @@ class MusicBrainz(
                 .url(url)
                 .header("User-Agent", USER_AGENT)
                 .build()
-        // MusicBrainz answers 503 to more than one request a second from an address; wait and retry.
-        repeat(ATTEMPTS - 1) {
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) return parseReleaseGroups(checkNotNull(response.body).string())
-                if (response.code != RATE_LIMITED) throw IOException("MusicBrainz: HTTP ${response.code}")
+        // MusicBrainz answers 503 to more than one request a second from an address, and at times
+        // does not answer at all: the user saw a bare "timeout". Wait and retry.
+        var failure = IOException("MusicBrainz: no attempts")
+        for (attempt in 1..ATTEMPTS) {
+            if (attempt > 1) Thread.sleep(retryDelayMs)
+            try {
+                return parseReleaseGroups(get(request))
+            } catch (e: IOException) {
+                failure = e
             }
-            Thread.sleep(retryDelayMs)
         }
-        val json =
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("MusicBrainz: HTTP ${response.code}")
-                checkNotNull(response.body).string()
-            }
-        return parseReleaseGroups(json)
+        throw failure
     }
+
+    private fun get(request: Request): String =
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("MusicBrainz: HTTP ${response.code}")
+            checkNotNull(response.body).string()
+        }
 }
 
 internal fun parseReleaseGroups(json: String): List<Album> {

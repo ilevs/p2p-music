@@ -52,7 +52,28 @@ jobs:
           # LiveStreamTest streams a public torrent from the real swarm. PRs only: the swarm sometimes
           # gives a runner no peers for minutes, and that must not block the release of merged code.
           LIVE_TESTS: ${{ github.event_name == 'pull_request' }}
-        run: ./gradlew testDebugUnitTest --stacktrace
+        # Core dumps on: the test JVM has died with exit value 139 and left no hs_err file.
+        run: |
+          sudo sysctl -w kernel.core_pattern=/tmp/core.%e.%p
+          ulimit -c unlimited
+          ./gradlew --stop
+          ./gradlew testDebugUnitTest --stacktrace
+
+      # A native crash of the test JVM (exit value 139): the stack of the thread that crashed.
+      - name: Print the JVM crash report
+        if: ${{ failure() }}
+        run: |
+          find . -name "hs_err*" -print -exec head -n 120 {} \;
+          command -v gdb > /dev/null || sudo apt-get install -y gdb > /dev/null
+          for core in /tmp/core.*; do
+            [ -f "$core" ] || continue
+            echo "== $core"
+            gdb -batch -ex "bt 30" -ex "info sharedlibrary" "$JAVA_HOME/bin/java" "$core" 2>&1 | grep -v "^\[New LWP" | tail -n 120
+          done
+
+      - name: Speed metrics
+        if: ${{ !cancelled() }}
+        run: grep -rahoE "METRIC \S+" app/build/test-results/ | sort -u | tee -a "$GITHUB_STEP_SUMMARY" || true
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace

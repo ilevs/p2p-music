@@ -45,7 +45,7 @@ fail() {
   adb logcat -d -b crash
   adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession" | tail -60
   # The head of a playback error, which the tail above cuts off.
-  adb logcat -d | grep -E -A3 "Playback error|Caused by" | grep -v "^--" | head -40
+  adb logcat -d -s ExoPlayerImplInternal:E | grep -E -A3 "Playback error|Caused by" | grep -v "^--" | head -40
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
   # The stats line (peers, trackers, DHT) is at the bottom of the player list, below every file.
   for _ in $(seq 30); do adb shell input swipe 160 500 160 100 100; done; sleep 1
@@ -139,27 +139,50 @@ echo "::endgroup::"
 echo "::group::Find an album and play it"
 adb shell am force-stop "$package"
 adb logcat -c
+# Seconds since $2 for the step $1 of the user's path, into the job summary. Rough: a screen dump takes seconds.
+metric() {
+  echo "METRIC $1=$(($(date +%s) - $2))" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+}
+launched=$(date +%s)
 adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
-sleep 10
-python3 "$here/tap.py" "Поиск" || fail "No search tab"
+for _ in $(seq 20); do
+  python3 "$here/tap.py" "Поиск" && break
+  sleep 1
+done || fail "No search tab"
+metric launch_to_ui_s "$launched"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
 python3 "$here/tap.py" "Найти" || fail "No search button"
-for _ in $(seq 10); do
-  sleep 3
+searched=$(date +%s)
+for _ in $(seq 20); do
+  sleep 1
   # The row's "artist · year" line: the catalog also lists tributes named after the album.
   python3 "$here/tap.py" "Pink Floyd · 1973" && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
-for _ in $(seq 60); do
-  sleep 3
+metric search_to_albums_s "$searched"
+tapped=$(date +%s)
+playing=
+for _ in $(seq 90); do
+  sleep 1
+  # The play button sits below the track list, and a real album is longer than the screen.
+  for _ in 1 2 3; do adb shell input swipe 160 500 160 100 100; done
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+  if adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"'; then
+    playing=yes
+    break
+  fi
   # Playback starts on the player tab; an error from the trackers stays on the search screen.
   python3 "$here/tap.py" "Плеер" > /dev/null || true
-done || {
+done
+# Not "done || fail": a loop that runs out ends with the status of its last command, which is 0 here.
+if [ -z "$playing" ]; then
+  adb exec-out screencap -p > screen-album.png
+  echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -60
   python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   fail "The album found in the catalog does not play"
-}
+fi
+metric album_tap_to_sound_s "$tapped"
+metric launch_to_sound_s "$launched"
 adb exec-out screencap -p > screen-album.png
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then

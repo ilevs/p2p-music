@@ -1,10 +1,14 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import org.libtorrent4j.TorrentHandle
 import java.io.IOException
+
+private const val MAGNET_FIRST_MS = 20_000L
 
 data class SearchResult(
     val id: String,
@@ -15,6 +19,8 @@ data class SearchResult(
     val leeches: Int,
     /** Name of the [TorrentSource] that found it; set by [AllSources]. */
     val source: String = "",
+    /** A magnet link from the search page, when the tracker shows one. */
+    val magnet: String = "",
 )
 
 /** A built-in torrent tracker. Blocking calls: use them off the main thread. */
@@ -57,9 +63,33 @@ class AllSources(
         outcome: Result<List<SearchResult>>,
     ): String {
         val message = outcome.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "ничего не найдено"
-        return if (message.startsWith(source.name)) message else "${source.name}: $message"
+        return named(source, message)
     }
 
-    override fun torrentFile(result: SearchResult): ByteArray =
-        sources.first { it.name == result.source }.torrentFile(result)
+    private fun named(
+        source: TorrentSource,
+        message: String,
+    ) = if (message.startsWith(source.name)) message else "${source.name}: $message"
+
+    override fun torrentFile(result: SearchResult): ByteArray {
+        val source = sources.first { it.name == result.source }
+        return try {
+            source.torrentFile(result)
+        } catch (e: IOException) {
+            throw IOException(named(source, ".torrent не скачался: ${e.message ?: e}"), e)
+        }
+    }
 }
+
+/**
+ * Opens [result] by its magnet, which needs only peers; by the .torrent when the tracker shows no magnet
+ * or the magnet finds no metadata in time. Blocking.
+ */
+fun TorrentSource.open(
+    result: SearchResult,
+    engine: TorrentEngine,
+): TorrentHandle =
+    result.magnet
+        .takeIf { it.isNotEmpty() }
+        ?.let { runCatching { engine.openMagnet(it, MAGNET_FIRST_MS) }.getOrNull() }
+        ?: engine.openTorrent(torrentFile(result))
