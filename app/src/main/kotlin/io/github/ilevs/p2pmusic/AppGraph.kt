@@ -42,10 +42,7 @@ class AppGraph(
 ) {
     val settings = SettingsStore(context)
 
-    val engine =
-        TorrentEngine(File(context.getExternalFilesDir(null) ?: context.filesDir, "torrent")).apply {
-            setSeeding(settings.load().seeding)
-        }
+    val engine = TorrentEngine(File(context.getExternalFilesDir(null) ?: context.filesDir, "torrent"))
 
     val player: ExoPlayer =
         ExoPlayer
@@ -70,7 +67,7 @@ class AppGraph(
     val scope = MainScope()
 
     init {
-        scope.launch(io) { engine.start() }
+        scope.launch(io) { engine.setSeeding(settings.load().seeding) }
     }
 
     val stream = StreamController(engine, settings, player, scope, io)

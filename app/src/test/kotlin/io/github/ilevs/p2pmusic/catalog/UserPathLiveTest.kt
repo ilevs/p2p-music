@@ -45,11 +45,14 @@ class UserPathLiveTest {
         assertTrue(info.isValid && info.numFiles() > 0)
 
         // The magnet alone, for as long as the app waits for it before it takes the .torrent.
-        val alone = TorrentEngine(temp.newFolder())
-        val (magnet, coldMs) = timed { runCatching { alone.openMagnet(pick.magnet, MAGNET_FIRST_MS) } }
+        val (magnet, coldMs) =
+            TorrentEngine(temp.newFolder()).use { alone ->
+                timed { runCatching { alone.openMagnet(pick.magnet, MAGNET_FIRST_MS).infoHash() } }
+            }
         // The way the app opens a release: the magnet first, then the .torrent.
-        val (handle, openMs) = timed { source.open(pick, TorrentEngine(temp.newFolder())) }
-        assertEquals(info.infoHash(), handle.infoHash())
+        val (hash, openMs) =
+            TorrentEngine(temp.newFolder()).use { engine -> timed { source.open(pick, engine).infoHash() } }
+        assertEquals(info.infoHash(), hash)
 
         // Collected into the CI job summary, to compare builds.
         println("METRIC torrent_file_ms=$torrentMs")

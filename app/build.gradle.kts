@@ -147,6 +147,8 @@ tasks.withType<Test>().configureEach {
     dependsOn(extractLibtorrentJni)
     // LiveStreamTest prints swarm state and timings for the CI log.
     testLogging.showStandardStreams = true
+    // The last test started names the culprit when the test JVM dies without a report.
+    testLogging.events("started", "failed")
     systemProperty(
         "libtorrent4j.jni.path",
         libtorrentJniDir

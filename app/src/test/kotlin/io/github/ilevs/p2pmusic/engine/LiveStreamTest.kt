@@ -66,7 +66,7 @@ class LiveStreamTest {
             logger.interrupt()
             logger.join()
             // Otherwise the ISO keeps downloading into a deleted folder while the other tests run.
-            engine.find(info.infoHash().toHex())?.pause()
+            engine.close()
         }
     }
 

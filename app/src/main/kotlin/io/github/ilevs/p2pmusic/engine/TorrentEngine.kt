@@ -16,6 +16,7 @@ import org.libtorrent4j.swig.error_code
 import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.load_torrent_limits
 import org.libtorrent4j.swig.settings_pack
+import java.io.Closeable
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
@@ -40,7 +41,7 @@ private const val REMOVE_TIMEOUT_MS = 5_000L
 class TorrentEngine(
     dataDir: File,
     private val settings: SettingsPack = SettingsPack(),
-) {
+) : Closeable {
     /** Cached .torrent files, `<infohash>.torrent`. */
     val torrentsDir = File(dataDir, "torrents")
     private val downloadsDir = File(dataDir, "downloads")
@@ -84,15 +85,18 @@ class TorrentEngine(
         }
     private val session: SessionManager by sessionLazy
 
-    /** Starts the session and its DHT early, so the first magnet does not wait for the bootstrap. */
-    fun start() {
-        check(session.isRunning)
-    }
-
-    /** Off caps uploads at 1 KB/s: libtorrent has no real zero, 0 means unlimited. */
+    /**
+     * Off caps uploads at 1 KB/s: libtorrent has no real zero, 0 means unlimited.
+     * Starts the session if it is not running, which the app does at launch so the first magnet finds the DHT ready.
+     */
     fun setSeeding(enabled: Boolean) {
         settings.uploadRateLimit(if (enabled) 0 else MIN_UPLOAD_BYTES_PER_SECOND)
-        if (sessionLazy.isInitialized()) session.applySettings(settings)
+        session.applySettings(settings)
+    }
+
+    /** Stops the session. A session left running crashed the JVM of the tests when it exited (exit value 139). */
+    override fun close() {
+        if (sessionLazy.isInitialized()) session.stop()
     }
 
     /** Adds a magnet link (or finds it in the session) and waits [timeoutMs] for its metadata. */

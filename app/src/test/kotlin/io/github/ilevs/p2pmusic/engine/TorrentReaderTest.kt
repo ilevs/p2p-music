@@ -75,16 +75,18 @@ class TorrentReaderTest {
 
     @After
     fun tearDown() {
+        engine.close()
         seeder.stop()
     }
 
     @Test
     fun opensTheTorrentFileOverAMagnetWithoutPeers() {
-        val other = TorrentEngine(temp.newFolder(), localSettings())
-        val magnet = "magnet:?xt=urn:btih:$hash"
-        assertThrows(IOException::class.java) { other.openMagnet(magnet, timeoutMs = 1) }
+        TorrentEngine(temp.newFolder(), localSettings()).use { other ->
+            val magnet = "magnet:?xt=urn:btih:$hash"
+            assertThrows(IOException::class.java) { other.openMagnet(magnet, timeoutMs = 1) }
 
-        assertEquals(info.numFiles(), other.openTorrent(torrentBytes).torrentFile().numFiles())
+            assertEquals(info.numFiles(), other.openTorrent(torrentBytes).torrentFile().numFiles())
+        }
     }
 
     @Test
