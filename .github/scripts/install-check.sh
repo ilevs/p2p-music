@@ -164,6 +164,8 @@ tapped=$(date +%s)
 playing=
 for _ in $(seq 90); do
   sleep 1
+  # The play button sits below the track list, and a real album is longer than the screen.
+  for _ in 1 2 3; do adb shell input swipe 160 500 160 100 100; done
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   if adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"'; then
     playing=yes
