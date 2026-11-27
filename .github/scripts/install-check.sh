@@ -77,6 +77,17 @@ play_track() {
   done || fail "The track does not start playing"
 }
 
+# Taps the track named <track> in the open player and waits until a track of <length> (m:ss) plays.
+switch_track() {
+  python3 "$here/tap.py" "$1" || fail "No track $1 on the player screen"
+  for _ in $(seq 20); do
+    sleep 3
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml | grep -q "text=\"[0-9:]* / $2\"" &&
+      adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+  done || fail "Track $1 does not start playing after another track"
+}
+
 here="$(dirname "$0")"
 echo "::group::Play a track from a local seeder"
 work="$(mktemp -d)"
@@ -87,6 +98,13 @@ adb reverse tcp:6882 tcp:6882
 trap 'kill %1 2>/dev/null; tail -5 seeder.log' EXIT
 play_track "magnet:?xt=urn:btih:$hash\&x.pe=127.0.0.1:6882" "Тишина" 10
 adb exec-out screencap -p > screen-playing.png
+# Then the next tracks: each has its own length, so the position line shows which one plays. The first track
+# downloads in 15 s at the seeder's rate; once it is complete the torrent counts as finished, as with a short
+# track on a phone, and seeds drop a finished peer.
+sleep 30
+switch_track "Ветер" "1:30"
+switch_track "Дождь" "2:00"
+adb exec-out screencap -p > screen-third.png
 echo "::endgroup::"
 
 # Ubuntu's swarm: thousands of real peers from the internet, legal. The magnet carries no metadata, so the

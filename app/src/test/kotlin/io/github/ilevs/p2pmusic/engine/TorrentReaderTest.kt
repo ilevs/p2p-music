@@ -8,6 +8,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.libtorrent4j.Priority
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
@@ -22,7 +23,7 @@ import kotlin.random.Random
 /**
  * Streams a real torrent between two libtorrent sessions on localhost: no internet, no Android.
  * Checks the bytes a player would read, a read that starts mid-file (a seek), and that the
- * other files of the torrent are not downloaded.
+ * other folders of the torrent are not downloaded while the rest of the album is queued.
  */
 class TorrentReaderTest {
     @get:Rule
@@ -41,6 +42,7 @@ class TorrentReaderTest {
         // Shaped like a typical discography: album folders, Cyrillic names.
         val album = File(seedDir, "Исполнитель - Дискография").apply { mkdirs() }
         File(album, "2001 - Первый альбом").apply { mkdirs() }.resolve(TRACK_NAME).writeBytes(track)
+        File(album, "2001 - Первый альбом").resolve(NEXT_TRACK_NAME).writeBytes(cover)
         File(album, "Сканы").apply { mkdirs() }.resolve("scans.bin").writeBytes(cover)
         val torrentBytes =
             TorrentBuilder()
@@ -101,6 +103,14 @@ class TorrentReaderTest {
         (firstCoverPiece..lastCoverPiece).forEach { assertFalse("piece $it", handle.havePiece(it)) }
     }
 
+    @Test
+    fun queuesTheRestOfTheAlbum() {
+        TorrentReader(engine, TorrentRef(hash, trackIndex()), 0).close()
+        val handle = engine.handle(hash)
+        assertEquals(Priority.DEFAULT, handle.filePriority(fileIndex(NEXT_TRACK_NAME)))
+        assertEquals(Priority.IGNORE, handle.filePriority(fileIndex("scans.bin")))
+    }
+
     private fun trackIndex(): Int = fileIndex(TRACK_NAME)
 
     private fun fileIndex(name: String): Int = (0 until info.numFiles()).first { info.files().fileName(it) == name }
@@ -128,6 +138,7 @@ class TorrentReaderTest {
     private companion object {
         const val LOCALHOST = "127.0.0.1"
         const val TRACK_NAME = "01 Песня.mp3"
+        const val NEXT_TRACK_NAME = "02 Другая песня.mp3"
         const val PIECE_SIZE = 32 * 1024
         const val TRACK_SIZE = 1_000_000
         const val COVER_SIZE = 700_000

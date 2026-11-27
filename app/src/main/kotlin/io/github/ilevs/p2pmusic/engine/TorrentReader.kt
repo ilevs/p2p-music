@@ -2,6 +2,7 @@ package io.github.ilevs.p2pmusic.engine
 
 import org.libtorrent4j.Priority
 import java.io.Closeable
+import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 
@@ -36,8 +37,15 @@ class TorrentReader(
         span = FileSpan(files.fileOffset(ref.fileIndex), files.fileSize(ref.fileIndex), info.pieceLength())
         path = files.filePath(ref.fileIndex, handle.savePath())
         val wasIdle = handle.status().isFinished
-        // Playing a file downloads all of it in the background; other files of the torrent stay untouched.
+        // Playing a file downloads all of it in the background, then the rest of its album folder: a torrent
+        // with nothing left to fetch loses its unchoke slot at the seeds, and the next track would wait for one.
+        // Other folders (albums of a discography, scans) stay untouched.
         handle.filePriority(ref.fileIndex, Priority.TOP_PRIORITY)
+        val album = File(files.filePath(ref.fileIndex)).parent
+        for (i in 0 until files.numFiles()) {
+            val isAlbumTrack = File(files.filePath(i)).parent == album && isAudioFile(files.fileName(i))
+            if (isAlbumTrack && handle.filePriority(i) == Priority.IGNORE) handle.filePriority(i, Priority.DEFAULT)
+        }
         // With nothing selected the torrent announced itself as complete, and trackers send no seeds to a seed.
         if (wasIdle) {
             handle.forceReannounce()
