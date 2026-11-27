@@ -129,6 +129,8 @@ class TorrentEngine(
         return awaitMetadata(hash)
     }
 
+    fun dhtNodes(): Long = if (sessionLazy.isInitialized()) session.dhtNodes() else 0
+
     fun find(hash: String): TorrentHandle? = session.find(Sha1Hash.parseHex(hash))?.takeIf { it.isValid }
 
     /** Blocks until [piece] is downloaded and verified. Interrupting the thread cancels the wait. */

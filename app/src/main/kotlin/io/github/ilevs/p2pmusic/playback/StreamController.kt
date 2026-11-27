@@ -48,6 +48,9 @@ data class StreamState(
     val seekMs: Long? = null,
     val peers: Int = 0,
     val downloadRate: Int = 0,
+    val trackersUp: Int = 0,
+    val trackers: Int = 0,
+    val dhtNodes: Long = 0,
 )
 
 /**
@@ -219,8 +222,9 @@ class StreamController(
         statsJob =
             scope.launch {
                 while (isActive) {
-                    val status = withContext(io) { hash?.let(engine::find)?.status() }
-                    if (status != null) {
+                    val handle = withContext(io) { hash?.let(engine::find) }
+                    if (handle != null) {
+                        val (status, trackers) = withContext(io) { handle.status() to handle.trackers() }
                         // A disk error pauses the torrent silently; without this the track just never starts.
                         val diskError = status.errorCode().takeIf { it.isError }?.message
                         mutableState.update {
@@ -228,6 +232,16 @@ class StreamController(
                                 peers = status.numPeers(),
                                 downloadRate = status.downloadRate(),
                                 error = diskError ?: it.error,
+                                // Shows a blocked tracker or DHT when a torrent finds no peers.
+                                trackersUp =
+                                    trackers.count { t ->
+                                        t.endpoints().any { e ->
+                                            e.infohashV1().fails() ==
+                                                0.toShort()
+                                        }
+                                    },
+                                trackers = trackers.size,
+                                dhtNodes = engine.dhtNodes(),
                             )
                         }
                     }
