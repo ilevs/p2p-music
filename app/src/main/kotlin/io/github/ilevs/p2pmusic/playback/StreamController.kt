@@ -241,7 +241,7 @@ class StreamController(
                                         }
                                     },
                                 trackers = trackers.size,
-                                dhtNodes = engine.dhtNodes(),
+                                dhtNodes = engine.dhtNodes,
                             )
                         }
                     }

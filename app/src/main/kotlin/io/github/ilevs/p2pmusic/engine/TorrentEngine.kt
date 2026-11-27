@@ -129,7 +129,7 @@ class TorrentEngine(
         return awaitMetadata(hash)
     }
 
-    fun dhtNodes(): Long = if (sessionLazy.isInitialized()) session.dhtNodes() else 0
+    val dhtNodes: Long get() = if (sessionLazy.isInitialized()) session.dhtNodes() else 0
 
     fun find(hash: String): TorrentHandle? = session.find(Sha1Hash.parseHex(hash))?.takeIf { it.isValid }
 
