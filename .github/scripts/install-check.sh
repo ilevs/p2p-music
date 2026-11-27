@@ -98,7 +98,10 @@ adb reverse tcp:6882 tcp:6882
 trap 'kill %1 2>/dev/null; tail -5 seeder.log' EXIT
 play_track "magnet:?xt=urn:btih:$hash\&x.pe=127.0.0.1:6882" "Тишина" 10
 adb exec-out screencap -p > screen-playing.png
-# Then the next tracks, while the first plays: each has its own length, so the position line shows which one plays.
+# Then the next tracks: each has its own length, so the position line shows which one plays. The first track
+# downloads in 15 s at the seeder's rate; once it is complete the torrent counts as finished, as with a short
+# track on a phone, and seeds drop a finished peer.
+sleep 30
 switch_track "Ветер" "1:30"
 switch_track "Дождь" "2:00"
 adb exec-out screencap -p > screen-third.png
