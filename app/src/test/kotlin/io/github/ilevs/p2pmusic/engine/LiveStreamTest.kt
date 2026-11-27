@@ -42,20 +42,33 @@ class LiveStreamTest {
         val engine = TorrentEngine(temp.newFolder())
         val info = TorrentInfo.bdecode(bytes)
         // Swarm state in the CI log, so a timeout says whether peers never came.
-        thread(isDaemon = true) {
-            while (true) {
-                engine.find(info.infoHash().toHex())?.let { handle ->
-                    val status = handle.status()
-                    println(
-                        "${status.state()} peers=${status.numPeers()} seeds=${status.numSeeds()} " +
-                            "rate=${status.downloadRate()} trackers=${handle.trackers().map(::trackerState)} " +
-                            "web seeds=${handle.urlSeeds()}",
-                    )
+        // Stopped before the test ends: polling a session that is being freed crashed the test JVM (exit 139).
+        val logger =
+            thread(isDaemon = true) {
+                try {
+                    while (true) {
+                        engine.find(info.infoHash().toHex())?.let { handle ->
+                            val status = handle.status()
+                            println(
+                                "${status.state()} peers=${status.numPeers()} seeds=${status.numSeeds()} " +
+                                    "rate=${status.downloadRate()} trackers=${handle.trackers().map(::trackerState)} " +
+                                    "web seeds=${handle.urlSeeds()}",
+                            )
+                        }
+                        Thread.sleep(STATUS_INTERVAL_MS)
+                    }
+                } catch (_: InterruptedException) {
+                    // The test is over.
                 }
-                Thread.sleep(STATUS_INTERVAL_MS)
             }
+        try {
+            println(checkStreams(engine, bytes))
+        } finally {
+            logger.interrupt()
+            logger.join()
+            // Otherwise the ISO keeps downloading into a deleted folder while the other tests run.
+            engine.find(info.infoHash().toHex())?.pause()
         }
-        println(checkStreams(engine, bytes))
     }
 
     private companion object {
