@@ -174,6 +174,8 @@ val extractLibtorrentJni =
 tasks.withType<Test>().configureEach {
     dependsOn(extractLibtorrentJni, cargoHost)
     systemProperty("java.library.path", File(rustDir, "target/release").absolutePath)
+    // A native crash (libtorrent, the Soulseek library) leaves its report where CI prints it.
+    jvmArgs("-XX:ErrorFile=${layout.buildDirectory.get().asFile}/hs_err_pid%p.log")
     // LiveStreamTest prints swarm state and timings for the CI log.
     testLogging.showStandardStreams = true
     systemProperty(

@@ -74,7 +74,9 @@ jobs:
           wc -l "$log" || true
           grep -iE "exclud|search|connecttopeer|pierce|peer address|error|warn" "$log" | cut -c1-300 | head -60 || true
           head -40 "$log" | cut -c1-300 || true
-          head -60 app/hs_err_pid*.log 2>/dev/null || true
+          for f in $(find "$GITHUB_WORKSPACE" /tmp "$HOME" -name 'hs_err_pid*.log' 2>/dev/null); do
+            echo "== $f"; grep -A12 -E "^# (Problematic frame|C  \[)|^Current thread|^Native frames" "$f" | head -60
+          done
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
