@@ -72,7 +72,8 @@ class TorrentEngine(
                         }
                     },
                 )
-                start(SessionParams(settings))
+                // Probe: the mmap disk back end may never apply file priorities on Android storage.
+                start(SessionParams(settings).apply { setPosixDiskIO() })
             }
         }
     private val session: SessionManager by sessionLazy
