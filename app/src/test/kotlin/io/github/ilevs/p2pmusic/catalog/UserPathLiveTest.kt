@@ -13,6 +13,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.libtorrent4j.TorrentInfo
+import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * The user's path on the real sites, up to the .torrent: album search in the catalog, then the
@@ -38,11 +40,26 @@ class UserPathLiveTest {
         val pick = pickTorrent(album, results) ?: pickTorrent(album, source.search(album.artist))
 
         assertNotNull("No release with seeds for $album among $results", pick)
-        val info = TorrentInfo.bdecode(source.torrentFile(checkNotNull(pick)))
+        val (info, torrentMs) = timed { TorrentInfo.bdecode(source.torrentFile(checkNotNull(pick))) }
         assertTrue(info.isValid && info.numFiles() > 0)
 
-        // The fallback when the .torrent host is blocked: the magnet from the search page, metadata from peers.
-        val handle = TorrentEngine(temp.newFolder()).openMagnet(pick.magnet)
+        // The way the app opens it: the magnet from the search page, metadata from peers.
+        val cold = temp.newFolder()
+        val (handle, coldMs) = timed { TorrentEngine(cold).openMagnet(pick.magnet) }
         assertEquals(info.infoHash(), handle.infoHash())
+
+        // A later launch: the DHT nodes of the last run are kept, the .torrent cache is not (a new album).
+        val warm = temp.newFolder()
+        File(cold, "session.dat").copyTo(File(warm, "session.dat"))
+        val (_, warmMs) = timed { TorrentEngine(warm).openMagnet(pick.magnet) }
+        // Collected into the CI job summary, to compare builds.
+        println("METRIC torrent_file_ms=$torrentMs")
+        println("METRIC magnet_metadata_cold_ms=$coldMs")
+        println("METRIC magnet_metadata_saved_dht_ms=$warmMs")
+    }
+
+    private fun <T> timed(block: () -> T): Pair<T, Long> {
+        val start = System.nanoTime()
+        return block() to TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
     }
 }

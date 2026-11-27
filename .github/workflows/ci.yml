@@ -54,6 +54,10 @@ jobs:
           LIVE_TESTS: ${{ github.event_name == 'pull_request' }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      - name: Speed metrics
+        if: ${{ !cancelled() }}
+        run: grep -rhoE "METRIC \S+" app/build/test-results/ | sort -u | tee -a "$GITHUB_STEP_SUMMARY" || true
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 

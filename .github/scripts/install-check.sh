@@ -150,6 +150,7 @@ for _ in $(seq 10); do
   # The row's "artist · year" line: the catalog also lists tributes named after the album.
   python3 "$here/tap.py" "Pink Floyd · 1973" && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
+tapped=$(date +%s)
 for _ in $(seq 60); do
   sleep 3
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
@@ -160,6 +161,8 @@ done || {
   python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   fail "The album found in the catalog does not play"
 }
+# Rough, in steps of the poll above; enough to see a regression between builds.
+echo "METRIC album_tap_to_sound_s=$(($(date +%s) - tapped))" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 adb exec-out screencap -p > screen-album.png
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
