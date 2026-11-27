@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.catalog
 
+import io.github.ilevs.p2pmusic.engine.SoulseekFile
 import io.github.ilevs.p2pmusic.playback.AudioFile
 import io.github.ilevs.p2pmusic.search.SearchResult
 import okhttp3.OkHttpClient
@@ -33,6 +34,29 @@ class CatalogTest {
         assertEquals(albumRelease, pickTorrent(album, listOf(discography, albumRelease, dead, other)))
         assertEquals(discography, pickTorrent(album, listOf(discography, dead, other)))
         assertNull(pickTorrent(album, listOf(dead, other)))
+    }
+
+    @Test
+    fun picksSoulseekFoldersWithAFreeSlotThenTheFastest() {
+        val album = Album("1", "Группа крови", "Кино", "1988")
+
+        fun file(
+            user: String,
+            path: String,
+            slots: Int,
+            speed: Int,
+        ) = SoulseekFile(user, path, 1, slots, speed)
+        val busy = file("busy", "Музыка\\Кино\\1988 Группа крови\\01 Группа крови.mp3", 0, 9_000_000)
+        val slow2 = file("slow", "Кино\\Группа крови\\02 Закрой за мной дверь.mp3", 1, 100)
+        val slow1 = file("slow", "Кино\\Группа крови\\01 Группа крови.mp3", 1, 100)
+        val fast = file("fast", "Кино - Группа крови (1988)\\01.flac", 1, 5_000)
+        val cover = file("fast", "Кино - Группа крови (1988)\\cover.jpg", 1, 5_000)
+        val otherAlbum = file("other", "Кино\\Звезда по имени Солнце\\01 Группа крови.mp3", 1, 9_000)
+        val otherArtist = file("cover", "Tribute\\Группа крови\\01.mp3", 1, 9_000)
+        assertEquals(
+            listOf(listOf(fast), listOf(slow1, slow2), listOf(busy)),
+            soulseekFolders(album, listOf(busy, slow2, slow1, fast, cover, otherAlbum, otherArtist)),
+        )
     }
 
     @Test

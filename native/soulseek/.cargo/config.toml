@@ -1,0 +1,6 @@
+# 16 KB pages: Android 15+ devices with 16 KB pages refuse 4 KB-aligned native libraries.
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

@@ -1,5 +1,7 @@
 package io.github.ilevs.p2pmusic.catalog
 
+import io.github.ilevs.p2pmusic.engine.SoulseekFile
+import io.github.ilevs.p2pmusic.engine.isAudioFile
 import io.github.ilevs.p2pmusic.playback.AudioFile
 import io.github.ilevs.p2pmusic.search.SearchResult
 
@@ -25,6 +27,25 @@ internal fun albumFiles(
 ): List<AudioFile> {
     val title = normalize(album)
     return files.filter { title in normalize(it.name) }.ifEmpty { files }
+}
+
+/**
+ * Soulseek folders that hold [album], one per user, tracks in order: those with a free upload slot first,
+ * then the fastest, since the first track should start in seconds.
+ */
+internal fun soulseekFolders(
+    album: Album,
+    files: List<SoulseekFile>,
+): List<List<SoulseekFile>> {
+    val artist = normalize(album.artist)
+    val title = normalize(album.title)
+    return files
+        .filter { isAudioFile(it.name) && artist in normalize(it.path) && title in normalize(it.folder) }
+        .groupBy { it.user to it.folder }
+        .values
+        .map { folder -> folder.sortedBy { it.name } }
+        .sortedWith(compareByDescending<List<SoulseekFile>> { it[0].freeSlots > 0 }.thenByDescending { it[0].speed })
+        .distinctBy { it[0].user }
 }
 
 private val NonWord = Regex("[^\\p{L}\\p{N}]+")

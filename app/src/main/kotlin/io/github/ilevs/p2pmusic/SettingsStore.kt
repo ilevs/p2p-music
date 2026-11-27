@@ -17,6 +17,8 @@ data class UserSettings(
     val proxyUser: String = "",
     val proxyPassword: String = "",
     val seeding: Boolean = true,
+    val soulseekLogin: String = "",
+    val soulseekPassword: String = "",
 )
 
 fun UserSettings.credentials(): Credentials? =
@@ -81,6 +83,8 @@ class SettingsStore(
             proxyUser = prefs.getString(PROXY_USER, "").orEmpty(),
             proxyPassword = prefs.getString(PROXY_PASSWORD, "").orEmpty(),
             seeding = prefs.getBoolean(SEEDING, true),
+            soulseekLogin = prefs.getString(SOULSEEK_LOGIN, "").orEmpty(),
+            soulseekPassword = prefs.getString(SOULSEEK_PASSWORD, "").orEmpty(),
         )
 
     fun save(settings: UserSettings) {
@@ -92,6 +96,8 @@ class SettingsStore(
             putString(PROXY_USER, settings.proxyUser)
             putString(PROXY_PASSWORD, settings.proxyPassword)
             putBoolean(SEEDING, settings.seeding)
+            putString(SOULSEEK_LOGIN, settings.soulseekLogin)
+            putString(SOULSEEK_PASSWORD, settings.soulseekPassword)
         }
     }
 
@@ -128,5 +134,7 @@ class SettingsStore(
         const val LAST_POSITION = "last_position"
         const val LIBRARY = "library"
         const val SEEDING = "seeding"
+        const val SOULSEEK_LOGIN = "soulseek_login"
+        const val SOULSEEK_PASSWORD = "soulseek_password"
     }
 }

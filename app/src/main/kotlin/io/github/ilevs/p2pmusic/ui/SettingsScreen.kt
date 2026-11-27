@@ -54,15 +54,14 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(stringResource(R.string.rutracker_section), style = MaterialTheme.typography.titleMedium)
-        Field(
-            R.string.login,
-            settings.rutrackerLogin,
-            onValueChange = { settings = settings.copy(rutrackerLogin = it) },
-        )
-        Field(R.string.password, settings.rutrackerPassword, isSecret = true, onValueChange = {
-            settings =
-                settings.copy(rutrackerPassword = it)
-        })
+        Credentials(settings.rutrackerLogin, settings.rutrackerPassword) { login, password ->
+            settings = settings.copy(rutrackerLogin = login, rutrackerPassword = password)
+        }
+        Text(stringResource(R.string.soulseek_section), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.soulseek_hint), style = MaterialTheme.typography.bodySmall)
+        Credentials(settings.soulseekLogin, settings.soulseekPassword) { login, password ->
+            settings = settings.copy(soulseekLogin = login, soulseekPassword = password)
+        }
         Text(stringResource(R.string.proxy_section), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.proxy_hint), style = MaterialTheme.typography.bodySmall)
         Field(R.string.proxy_host, settings.proxyHost, onValueChange = { settings = settings.copy(proxyHost = it) })
@@ -70,11 +69,9 @@ fun SettingsScreen(
             settings =
                 settings.copy(proxyPort = it)
         })
-        Field(R.string.login, settings.proxyUser, onValueChange = { settings = settings.copy(proxyUser = it) })
-        Field(R.string.password, settings.proxyPassword, isSecret = true, onValueChange = {
-            settings =
-                settings.copy(proxyPassword = it)
-        })
+        Credentials(settings.proxyUser, settings.proxyPassword) { login, password ->
+            settings = settings.copy(proxyUser = login, proxyPassword = password)
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.seeding), style = MaterialTheme.typography.titleMedium)
@@ -95,6 +92,16 @@ fun SettingsScreen(
         state.message?.let { Text(it) }
         LibrarySync(catalog)
     }
+}
+
+@Composable
+private fun Credentials(
+    login: String,
+    password: String,
+    onChange: (login: String, password: String) -> Unit,
+) {
+    Field(R.string.login, login, onValueChange = { onChange(it, password) })
+    Field(R.string.password, password, isSecret = true, onValueChange = { onChange(login, it) })
 }
 
 @Composable

@@ -10,7 +10,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import io.github.ilevs.p2pmusic.catalog.CatalogController
 import io.github.ilevs.p2pmusic.catalog.MusicBrainz
+import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
+import io.github.ilevs.p2pmusic.playback.SoulseekDataSource
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.TorrentDataSource
 import io.github.ilevs.p2pmusic.search.AllSources
@@ -41,16 +43,21 @@ class AppGraph(
 ) {
     val settings = SettingsStore(context)
 
+    private val storage = context.getExternalFilesDir(null) ?: context.filesDir
+
     val engine =
-        TorrentEngine(File(context.getExternalFilesDir(null) ?: context.filesDir, "torrent")).apply {
+        TorrentEngine(File(storage, "torrent")).apply {
             setSeeding(settings.load().seeding)
         }
+
+    private val soulseek = SoulseekEngine(File(storage, "soulseek"))
 
     val player: ExoPlayer =
         ExoPlayer
             .Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(TorrentDataSource.Factory(engine)))
-            .setLoadControl(
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(SoulseekDataSource.Factory(soulseek, TorrentDataSource.Factory(engine))),
+            ).setLoadControl(
                 DefaultLoadControl
                     .Builder()
                     .setBufferDurationsMs(MIN_BUFFER_MS, MAX_BUFFER_MS, START_BUFFER_MS, REBUFFER_MS)
@@ -68,7 +75,7 @@ class AppGraph(
 
     val scope = MainScope()
 
-    val stream = StreamController(engine, settings, player, scope, io)
+    val stream = StreamController(engine, soulseek, settings, player, scope, io)
 
     private val cookies = MemoryCookieJar()
     private var trackerClient: Pair<ProxySettings?, OkHttpClient>? = null

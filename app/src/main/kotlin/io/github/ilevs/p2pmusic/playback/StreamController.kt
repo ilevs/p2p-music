@@ -11,6 +11,7 @@ import io.github.ilevs.p2pmusic.LastPlayed
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.catalog.albumFiles
+import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.engine.TorrentRef
 import io.github.ilevs.p2pmusic.engine.isAudioFile
@@ -38,6 +39,8 @@ data class AudioFile(
     val index: Int,
     val name: String,
     val size: Long,
+    /** The media URI of a file outside a torrent (Soulseek); torrent files are addressed by [index]. */
+    val uri: String? = null,
 )
 
 data class StreamState(
@@ -60,6 +63,7 @@ data class StreamState(
  */
 class StreamController(
     val engine: TorrentEngine,
+    val soulseek: SoulseekEngine,
     private val settings: SettingsStore,
     val player: Player,
     private val scope: CoroutineScope,
@@ -108,15 +112,9 @@ class StreamController(
     }
 
     /**
-     * Opens a .torrent that [download] fetches off the main thread, e.g. from a tracker.
-     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it.
+     * Opens the torrent that [open] returns off the main thread, e.g. from a tracker's .torrent. With an [album],
+     * keeps only that album's files (the torrent may be a discography) and plays it.
      */
-    fun openTorrent(
-        album: String? = null,
-        download: () -> ByteArray,
-    ) = openHandle(album) { engine.openTorrent(download()) }
-
-    /** Opens the torrent that [open] returns off the main thread; [album] as in [openTorrent]. */
     fun openHandle(
         album: String? = null,
         open: () -> TorrentHandle,
@@ -135,12 +133,26 @@ class StreamController(
         }
     }
 
-    /** The opened torrent's audio files as a queue, for the player, the notification and the car. */
+    /** Plays [files] that are not in a torrent, e.g. from Soulseek, as the album [name]. Any thread. */
+    fun openFiles(
+        name: String,
+        files: List<AudioFile>,
+    ) {
+        scope.launch {
+            hash = null
+            statsJob?.cancel()
+            mutableState.update { StreamState(torrentName = name, files = files) }
+            files.firstOrNull()?.let(::play)
+        }
+    }
+
+    /** The opened album's audio files as a queue, for the player, the notification and the car. */
     fun queueItems(): List<MediaItem> {
-        val torrentHash = hash ?: return emptyList()
+        val torrentHash = hash
         val current = state.value
-        return current.files.map {
-            val uri = TorrentRef(torrentHash, it.index).toUri()
+        return current.files.mapNotNull {
+            val uri =
+                it.uri ?: torrentHash?.let { hash -> TorrentRef(hash, it.index).toUri() } ?: return@mapNotNull null
             MediaItem
                 .Builder()
                 .setMediaId(uri)

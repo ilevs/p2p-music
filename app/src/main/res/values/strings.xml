@@ -27,6 +27,8 @@
   <string name="import_library">Загрузить из файла</string>
   <string name="result_details">%1$s · %2$.0f МБ · Сиды: %3$d</string>
   <string name="rutracker_section">RuTracker</string>
+  <string name="soulseek_section">Soulseek</string>
+  <string name="soulseek_hint">Запасной источник: ищет там альбом, если на трекерах его нет. Аккаунт создаётся при первом входе, пароль не восстановить.</string>
   <string name="login">Логин</string>
   <string name="password">Пароль</string>
   <string name="proxy_section">SOCKS5-прокси</string>

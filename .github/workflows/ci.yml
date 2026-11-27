@@ -28,6 +28,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - uses: ./.github/actions/rust
+
       - name: ktlint
         run: ./gradlew ktlintCheck --stacktrace
 
@@ -49,6 +51,9 @@ jobs:
           # Optional: RuTrackerLiveTest runs against the real site only when these secrets exist.
           RUTRACKER_LOGIN: ${{ secrets.RUTRACKER_LOGIN }}
           RUTRACKER_PASSWORD: ${{ secrets.RUTRACKER_PASSWORD }}
+          # SoulseekLiveTest: a throwaway CI account, created on its first login; secrets override it if it is ever taken.
+          SOULSEEK_LOGIN: ${{ secrets.SOULSEEK_LOGIN || 'p2pmusic-ci-jvm' }}
+          SOULSEEK_PASSWORD: ${{ secrets.SOULSEEK_PASSWORD || 'p2pmusic-ci-not-secret' }}
           # LiveStreamTest streams a public torrent from the real swarm. PRs only: the swarm sometimes
           # gives a runner no peers for minutes, and that must not block the release of merged code.
           LIVE_TESTS: ${{ github.event_name == 'pull_request' }}
