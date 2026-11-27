@@ -54,9 +54,14 @@ jobs:
           LIVE_TESTS: ${{ github.event_name == 'pull_request' }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      # A native crash of the test JVM (exit value 139) leaves only this file to say where it happened.
+      - name: Print the JVM crash report
+        if: ${{ failure() }}
+        run: head -n 120 app/hs_err_pid*.log 2>/dev/null || true
+
       - name: Speed metrics
         if: ${{ !cancelled() }}
-        run: grep -rhoE "METRIC \S+" app/build/test-results/ | sort -u | tee -a "$GITHUB_STEP_SUMMARY" || true
+        run: grep -rahoE "METRIC \S+" app/build/test-results/ | sort -u | tee -a "$GITHUB_STEP_SUMMARY" || true
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace

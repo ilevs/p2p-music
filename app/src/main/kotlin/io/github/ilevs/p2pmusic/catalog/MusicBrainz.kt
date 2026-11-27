@@ -61,16 +61,19 @@ class MusicBrainz(
         for (attempt in 1..ATTEMPTS) {
             if (attempt > 1) Thread.sleep(retryDelayMs)
             try {
-                return client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) throw IOException("MusicBrainz: HTTP ${response.code}")
-                    parseReleaseGroups(checkNotNull(response.body).string())
-                }
+                return parseReleaseGroups(get(request))
             } catch (e: IOException) {
                 failure = e
             }
         }
         throw failure
     }
+
+    private fun get(request: Request): String =
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("MusicBrainz: HTTP ${response.code}")
+            checkNotNull(response.body).string()
+        }
 }
 
 internal fun parseReleaseGroups(json: String): List<Album> {
