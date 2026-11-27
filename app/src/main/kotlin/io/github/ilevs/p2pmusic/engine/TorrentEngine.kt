@@ -44,6 +44,9 @@ class TorrentEngine(
     val torrentsDir = File(dataDir, "torrents")
     private val downloadsDir = File(dataDir, "downloads")
 
+    // The DHT routing table from the last run, so a magnet finds peers without a cold bootstrap.
+    private val stateFile = File(dataDir, "session.dat")
+
     init {
         torrentsDir.mkdirs()
         downloadsDir.mkdirs()
@@ -52,6 +55,9 @@ class TorrentEngine(
         settings.setBoolean(settings_pack.bool_types.close_redundant_connections.swigValue(), false)
         // Peers dropped while nothing was selected are retried after this many seconds, not libtorrent's 60.
         settings.setInteger(settings_pack.int_types.min_reconnect_time.swigValue(), MIN_RECONNECT_SECONDS)
+        // Ask every tracker of a magnet at once, not tier by tier, so the metadata comes from the fastest one.
+        settings.setBoolean(settings_pack.bool_types.announce_to_all_trackers.swigValue(), true)
+        settings.setBoolean(settings_pack.bool_types.announce_to_all_tiers.swigValue(), true)
     }
 
     // Signalled on every alert we listen to; waiters re-check their condition after it.
@@ -75,10 +81,17 @@ class TorrentEngine(
                         }
                     },
                 )
-                start(SessionParams(settings))
+                // A state file cut short by a power loss is ignored, not fatal.
+                val saved = runCatching { SessionParams(stateFile).apply { setSettings(settings) } }.getOrNull()
+                start(saved ?: SessionParams(settings))
             }
         }
     private val session: SessionManager by sessionLazy
+
+    /** Starts the session and its DHT early, so the first magnet does not wait for the bootstrap. */
+    fun start() {
+        check(session.isRunning)
+    }
 
     /** Off caps uploads at 1 KB/s: libtorrent has no real zero, 0 means unlimited. */
     fun setSeeding(enabled: Boolean) {
@@ -160,6 +173,7 @@ class TorrentEngine(
             val seconds = METADATA_TIMEOUT_MS / MS_PER_SECOND
             throw IOException("За $seconds с не нашлось ни одного пира: раздача мёртвая или сеть режет торренты")
         }
+        stateFile.writeBytes(session.saveState())
         return requireNotNull(find(hash))
     }
 

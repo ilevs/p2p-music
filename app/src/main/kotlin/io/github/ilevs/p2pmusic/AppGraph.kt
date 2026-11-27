@@ -23,6 +23,7 @@ import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.io.File
 
@@ -67,6 +68,10 @@ class AppGraph(
             .build()
 
     val scope = MainScope()
+
+    init {
+        scope.launch(io) { engine.start() }
+    }
 
     val stream = StreamController(engine, settings, player, scope, io)
 

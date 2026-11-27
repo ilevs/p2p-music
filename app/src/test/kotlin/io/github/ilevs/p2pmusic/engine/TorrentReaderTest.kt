@@ -76,6 +76,13 @@ class TorrentReaderTest {
     }
 
     @Test
+    fun startsWithABrokenStateFile() {
+        val dir = temp.newFolder()
+        File(dir, "session.dat").writeText("cut short by a power loss")
+        TorrentEngine(dir, localSettings()).start()
+    }
+
+    @Test
     fun streamsWholeFile() {
         assertArrayEquals(track, readAll(TorrentReader(engine, TorrentRef(hash, trackIndex()), 0)))
     }
