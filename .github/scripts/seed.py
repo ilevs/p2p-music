@@ -13,6 +13,8 @@ session = lt.session({
     "enable_lsd": False,
     "enable_upnp": False,
     "enable_natpmp": False,
+    # The emulator's NAT can leave a dead connection open here; let the app connect again from the same address.
+    "allow_multiple_connections_per_ip": True,
     # A phone on mobile data gets a track slower than it plays; 64 KB/s makes the player wait for pieces.
     "upload_rate_limit": 65536,
 })

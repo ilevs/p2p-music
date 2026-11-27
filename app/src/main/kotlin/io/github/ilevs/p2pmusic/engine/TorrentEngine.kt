@@ -27,6 +27,7 @@ private const val METADATA_TIMEOUT_MS = 60_000L
 private const val MS_PER_SECOND = 1_000L
 private const val WAIT_STEP_MS = 500L
 private const val MIN_UPLOAD_BYTES_PER_SECOND = 1024
+private const val MIN_RECONNECT_SECONDS = 5
 
 /**
  * One libtorrent session for the whole app. Blocking calls: use them off the main thread.
@@ -49,6 +50,8 @@ class TorrentEngine(
         // A torrent with nothing selected counts as finished, and libtorrent would drop its seeds right after
         // the metadata; then the first track waits until they are found again.
         settings.setBoolean(settings_pack.bool_types.close_redundant_connections.swigValue(), false)
+        // Peers dropped while nothing was selected are retried after this many seconds, not libtorrent's 60.
+        settings.setInteger(settings_pack.int_types.min_reconnect_time.swigValue(), MIN_RECONNECT_SECONDS)
     }
 
     // Signalled on every alert we listen to; waiters re-check their condition after it.
@@ -72,8 +75,7 @@ class TorrentEngine(
                         }
                     },
                 )
-                // Probe: the mmap disk back end may never apply file priorities on Android storage.
-                start(SessionParams(settings).apply { setPosixDiskIO() })
+                start(SessionParams(settings))
             }
         }
     private val session: SessionManager by sessionLazy
