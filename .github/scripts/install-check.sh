@@ -176,12 +176,24 @@ echo "Played a track."
 # must come from Soulseek, the way a user hears an album the trackers do not have. One fixed account per
 # emulator: the server drops a session when the same name logs in elsewhere.
 echo "::group::Play a catalog album from Soulseek"
-user="p2pmusic-ci-$(adb shell getprop ro.build.version.sdk | tr -d '\r')-$(adb shell getconf PAGE_SIZE | tr -d '\r')"
+page="$(adb shell getconf PAGE_SIZE 2>/dev/null | tr -d '\r')"
+user="p2pmusic-ci-$(adb shell getprop ro.build.version.sdk | tr -d '\r')-${page:-4096}"
+# Taps the element with text $1 (the $2-th, from 0), scrolling down until it shows.
+tap_scrolling() {
+  for _ in 1 2 3 4 5; do
+    python3 "$here/tap.py" "$1" "${2:-0}" > /dev/null && return 0
+    adb shell input swipe 160 500 160 150 300
+    sleep 1
+  done
+  return 1
+}
+# Types $2 into the field labelled $1 (the $3-th).
 type_into() {
-  python3 "$here/tap.py" "$1" "${3:-0}" || { adb shell input swipe 160 600 160 300 200; python3 "$here/tap.py" "$1" "${3:-0}"; } \
-    || fail "No field $1 on the settings screen"
+  tap_scrolling "$1" "${3:-0}" || fail "No field $1 on the settings screen"
   adb shell input text "$2"
-  adb shell input keyevent 4  # hide the keyboard
+  # Back hides the keyboard; without a keyboard it would leave the screen.
+  adb shell dumpsys input_method | grep -q "mInputShown=true" && adb shell input keyevent 4
+  sleep 1
 }
 adb shell am force-stop "$package"
 adb logcat -c
@@ -192,8 +204,7 @@ type_into "Логин" "$user" 1
 type_into "Пароль" "${SOULSEEK_PASSWORD:-p2pmusic-ci-not-secret}" 1
 type_into "Адрес" "127.0.0.1"
 type_into "Порт" "9"
-for _ in 1 2 3; do python3 "$here/tap.py" "Сохранить" && break; adb shell input swipe 160 600 160 200 200; done \
-  || fail "No save button"
+tap_scrolling "Сохранить" || fail "No save button"
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
