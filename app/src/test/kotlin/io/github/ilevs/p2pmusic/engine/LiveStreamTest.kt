@@ -117,6 +117,6 @@ private fun readSome(
 
 private const val READ_BYTES = 64 * 1024
 
-// "url: fails, last message" per endpoint, to tell a refused announce from an empty swarm.
-private fun trackerState(entry: AnnounceEntry): String =
-    entry.url() + entry.endpoints().joinToString { " ${it.infohashV1().fails()} fails, '${it.infohashV1().message()}'" }
+// Whether each tracker ever answered, to tell a refused announce from an empty swarm.
+// Not endpoints(): its elements point into a freed native vector and crashed the test JVM.
+private fun trackerState(entry: AnnounceEntry): String = "${entry.url()} verified=${entry.isVerified}"

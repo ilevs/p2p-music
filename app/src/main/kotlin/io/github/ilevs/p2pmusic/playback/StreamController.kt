@@ -233,13 +233,8 @@ class StreamController(
                                 downloadRate = status.downloadRate(),
                                 error = diskError ?: it.error,
                                 // Shows a blocked tracker or DHT when a torrent finds no peers.
-                                trackersUp =
-                                    trackers.count { t ->
-                                        t.endpoints().any { e ->
-                                            e.infohashV1().fails() ==
-                                                0.toShort()
-                                        }
-                                    },
+                                // endpoints() hands out views into a freed native vector and crashed; isVerified is safe.
+                                trackersUp = trackers.count { it.isVerified },
                                 trackers = trackers.size,
                                 dhtNodes = engine.dhtNodes,
                             )
