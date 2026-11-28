@@ -125,7 +125,7 @@ private fun Field(
         singleLine = true,
         visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions =
-            KeyboardOptions(keyboardType = if (isSecret) KeyboardType.Password else keyboardType).onTapOnly(),
+            KeyboardOptions(keyboardType = if (isSecret) KeyboardType.Password else keyboardType),
         modifier =
             modifier.fillMaxWidth().remoteKeys(
                 LocalFocusManager.current,
