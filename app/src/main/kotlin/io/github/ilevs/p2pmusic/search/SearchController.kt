@@ -25,6 +25,7 @@ const val SOULSEEK = "Soulseek"
 private const val ENOUGH_FOLDERS = 10
 private const val MAX_FOLDERS = 30
 private const val ALBUM_TRACKS = 3
+private const val RACE_MS = 60_000L
 
 data class SearchState(
     val results: List<SearchResult> = emptyList(),
@@ -71,9 +72,12 @@ class SearchController(
         result: SearchResult,
         engine: TorrentEngine,
     ): OpenedAlbum {
-        val files = folders[result.id] ?: return torrentAlbum(source.open(result, engine), null)
+        val tapped = folders[result.id] ?: return torrentAlbum(source.open(result, engine), null)
+        // One user often keeps us queued for minutes; the same release under the same folder name sits with others.
+        val twins = folders.values.filter { folderResult(it).title.equals(result.title, ignoreCase = true) }
+        val winner = soulseek.race(twins.map { it[0] }, RACE_MS)
+        val files = twins.firstOrNull { it[0] == winner } ?: tapped.also { soulseek.download(it[0]) }
         // In order: the user sends them one after another, so each next track is on disk before it is needed.
-        soulseek.download(files[0])
         files.drop(1).forEach { runCatching { soulseek.download(it) } }
         return OpenedAlbum(null, result.title, files.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
     }
