@@ -71,12 +71,18 @@ class UserPathLiveTest {
         val nnmPick = nnm.search("Little Big Antipositive").maxByOrNull { it.seeds }
         println("NNM pick: $nnmPick")
         if (nnmPick != null) {
-            // Warm first, so a swarm that wakes up during the test favours the cold open, not the warm one.
-            val nnmWarmMs = warmOpenMs(nnm, nnmPick)
-            val (_, nnmColdMs) =
-                TorrentEngine(temp.newFolder()).use { engine -> timed { runCatching { nnm.open(nnmPick, engine) } } }
-            println("METRIC nnm_release_open_warm_ms=$nnmWarmMs")
-            println("METRIC nnm_release_open_cold_ms=$nnmColdMs")
+            // Cold and warm in turn, several times: one run each swung 3.5 s against 20 s with the swarm's mood.
+            val runs =
+                List(NNM_RUNS) {
+                    val (_, coldMs) =
+                        TorrentEngine(temp.newFolder()).use { engine ->
+                            timed { runCatching { nnm.open(nnmPick, engine) } }
+                        }
+                    coldMs to warmOpenMs(nnm, nnmPick)
+                }
+            println("NNM cold/warm ms: $runs")
+            println("METRIC nnm_release_open_cold_ms=${runs.map { it.first }.sorted()[NNM_RUNS / 2]}")
+            println("METRIC nnm_release_open_warm_ms=${runs.map { it.second }.sorted()[NNM_RUNS / 2]}")
         }
 
         // Collected into the CI job summary, to compare builds.
@@ -107,5 +113,6 @@ class UserPathLiveTest {
 
         // shortcut: a guess at how long a user reads the album list; measure it on a device if the numbers matter.
         const val USER_LOOKS_MS = 5_000L
+        const val NNM_RUNS = 3
     }
 }

@@ -237,7 +237,8 @@ class TorrentEngine(
     }
 }
 
-private fun parseMagnet(magnet: String): AddTorrentParams =
+// Not private: called from the class, and lint forbids synthetic accessors.
+internal fun parseMagnet(magnet: String): AddTorrentParams =
     try {
         AddTorrentParams.parseMagnetUri(magnet)
     } catch (e: IllegalArgumentException) {
