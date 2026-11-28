@@ -65,7 +65,8 @@ def search(artist):
     # The catalog's albums, not the trackers' releases.
     tap("Альбомы", exact=True)
     tap("Артист, альбом")
-    adb("shell", "input", "keyevent", "123", *["67"] * 60)
+    # The field keeps its text across tabs: delete both ways from the end, as install-check.sh does.
+    adb("shell", "input", "keyevent", "123", *["67", "112"] * 60)
     adb("shell", "input", "text", artist.replace(" ", "%s"))
     tap("Найти", exact=True)
     for i in range(LIST_WAIT_S):
