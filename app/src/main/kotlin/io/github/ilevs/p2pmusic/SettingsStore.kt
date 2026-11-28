@@ -59,10 +59,15 @@ internal fun SavedAlbum.toJson(): JSONObject =
         .put("title", album.title)
         .put("artist", album.artist)
         .put("year", album.year)
+        .put("cover", album.cover)
         .put("hash", hash)
 
 internal fun JSONObject.toSavedAlbum(): SavedAlbum =
-    SavedAlbum(Album(getString("id"), getString("title"), getString("artist"), getString("year")), getString("hash"))
+    SavedAlbum(
+        // Older versions saved no "cover".
+        Album(getString("id"), getString("title"), getString("artist"), getString("year"), optString("cover")),
+        getString("hash"),
+    )
 
 internal fun parseLibrary(json: String): List<SavedAlbum> {
     val array = JSONArray(json)

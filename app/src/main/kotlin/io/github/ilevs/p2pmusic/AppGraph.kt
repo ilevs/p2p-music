@@ -11,6 +11,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import io.github.ilevs.p2pmusic.catalog.CatalogController
+import io.github.ilevs.p2pmusic.catalog.Deezer
+import io.github.ilevs.p2pmusic.catalog.ITunes
 import io.github.ilevs.p2pmusic.catalog.MusicBrainz
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.SoulseekStalledException
@@ -99,7 +101,20 @@ class AppGraph(
     val search = SearchController(sources, tracker, soulseek, engine, settings, scope, io)
 
     // The catalog is not blocked anywhere, so it goes direct, without the tracker proxy.
-    val catalog = CatalogController(MusicBrainz(OkHttpClient()), sources, stream, settings, scope, io)
+    private val catalogClient = OkHttpClient()
+    val catalog =
+        CatalogController(
+            listOf(
+                MusicBrainz(catalogClient)::searchAlbums,
+                ITunes(catalogClient)::searchAlbums,
+                Deezer(catalogClient)::searchAlbums,
+            ),
+            sources,
+            stream,
+            settings,
+            scope,
+            io,
+        )
 
     // One client per proxy setting, so a changed proxy applies to the next request.
     @Synchronized

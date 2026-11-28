@@ -17,6 +17,9 @@ import io.github.ilevs.p2pmusic.toJson
 import io.github.ilevs.p2pmusic.toSavedAlbum
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,7 +60,7 @@ data class CatalogState(
 
 /** Album search in the catalog, and playing an album from a release the app picks on the tracker. */
 class CatalogController(
-    private val catalog: MusicBrainz,
+    private val catalogs: List<(String) -> List<Album>>,
     private val source: TorrentSource,
     private val stream: StreamController,
     private val settings: SettingsStore,
@@ -69,10 +72,16 @@ class CatalogController(
 
     private val searches = SearchCache(source)
 
-    /** Finds albums, then, while the user looks at them, makes the search a tap would and fetches the metadata. */
+    /**
+     * Asks all catalogs at once and shows their albums together; fails only when every catalog fails. Then, while
+     * the user looks at them, makes the search a tap would and fetches the metadata.
+     */
     fun search(query: String) {
         run {
-            val albums = catalog.searchAlbums(query)
+            val answers = coroutineScope { catalogs.map { async { runCatching { it(query) } } }.awaitAll() }
+            val failures = answers.mapNotNull { it.exceptionOrNull() }
+            if (failures.size == answers.size) throw IOException(failures.joinToString("; ") { it.message ?: "$it" })
+            val albums = mergeAlbums(answers.mapNotNull { a -> a.getOrNull() })
             mutableState.update { it.copy(albums = albums) }
             // Each on its own, so a slow tracker or a silent magnet holds up no other album.
             for (album in albums.take(ALBUMS_PREFETCHED)) {
