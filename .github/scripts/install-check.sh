@@ -263,8 +263,12 @@ echo "Played a track."
 
 # ilia's listening scenario: album after album of several artists, quick hops, and going back to one heard before.
 echo "::group::Listening scenario"
-python3 "$here/scenario.py" | tee -a /dev/stderr | grep "^METRIC" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
-[ "${PIPESTATUS[0]}" -eq 0 ] || fail "The listening scenario failed"
+# Unbuffered and into a file: the emulator runner's shell has no /dev/stderr to tee into.
+python3 -u "$here/scenario.py" > scenario.log 2>&1
+scenario=$?
+cat scenario.log
+grep "^METRIC" scenario.log >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+[ "$scenario" -eq 0 ] || fail "The listening scenario failed"
 adb shell pidof "$package" > /dev/null || fail "The app died in the listening scenario"
 echo "::endgroup::"
 
