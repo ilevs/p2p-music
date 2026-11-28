@@ -55,9 +55,10 @@ fail() {
   adb shell ls -lR "/sdcard/Android/data/$package/files/torrent/downloads" | head -20
   adb shell dumpsys media_session | grep -E "state=|error" | head -10
   # Thread stacks show where playback is stuck; emulator images allow adb root.
-  adb root > /dev/null 2>&1; adb wait-for-device; sleep 2
-  adb shell kill -3 "$(adb shell pidof "$package")"; sleep 3
-  adb shell 'cat $(ls -t /data/anr/* | head -1)' | grep -A20 -E '^"(main|ExoPlayer|Loader|pool|DefaultDispatcher)' | head -300
+  # Each step is time-boxed: with no ANR file "cat" got no argument and read stdin, hanging the job for 38 min.
+  timeout 30 adb root > /dev/null 2>&1; timeout 30 adb wait-for-device; sleep 2
+  timeout 10 adb shell kill -3 "$(timeout 10 adb shell pidof "$package")"; sleep 3
+  timeout 30 adb shell 'f=$(ls -t /data/anr/* 2>/dev/null | head -1); [ -n "$f" ] && cat "$f"' < /dev/null | grep -A20 -E '^"(main|ExoPlayer|Loader|pool|DefaultDispatcher)' | head -300
   echo "::error::$1"
   exit 1
 }
