@@ -11,6 +11,8 @@ import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
 private const val TIMEOUT_SECONDS = 30L
+private const val BROWSER_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
 
 /** SOCKS5 proxy for tracker requests, e.g. to reach trackers blocked in the country. */
 data class ProxySettings(
@@ -33,6 +35,18 @@ fun trackerHttpClient(
             .Builder()
             .cookieJar(cookieJar)
             .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            // Sites behind Cloudflare turn away a client that names itself as a library.
+            .addInterceptor { chain ->
+                val request =
+                    chain
+                        .request()
+                        .newBuilder()
+                        .header("User-Agent", BROWSER_USER_AGENT)
+                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                        .header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.8")
+                        .build()
+                chain.proceed(request)
+            }
     if (proxy != null) {
         builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress.createUnresolved(proxy.host, proxy.port)))
         // shortcut: the platform SOCKS client takes credentials only from the global Authenticator;

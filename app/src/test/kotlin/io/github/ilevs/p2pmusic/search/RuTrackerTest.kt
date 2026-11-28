@@ -73,6 +73,16 @@ class RuTrackerTest {
     }
 
     @Test
+    fun saysThatCloudflareAsksForABrowserNotThatTheProxyIsBroken() {
+        // What ilia's working proxy got on 2026-11-28, at login and at search.
+        repeat(2) { server.enqueue(page("<title>Just a moment...</title>").setResponseCode(403)) }
+        val atLogin = runCatching { tracker.login() }.exceptionOrNull()?.message.orEmpty()
+        val atSearch = runCatching { tracker.search("кино") }.exceptionOrNull()?.message.orEmpty()
+        assertTrue(atLogin, "Cloudflare" in atLogin && "Проверьте прокси" !in atLogin)
+        assertTrue(atSearch, "Cloudflare" in atSearch)
+    }
+
+    @Test
     fun downloadsTorrentFile() {
         server.enqueue(MockResponse().setBody("d8:announce0:e"))
         val bytes = tracker.torrentFile(SearchResult("42", "", "", 0, 0, 0))

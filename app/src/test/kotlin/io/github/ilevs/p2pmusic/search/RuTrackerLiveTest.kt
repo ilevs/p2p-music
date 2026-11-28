@@ -1,5 +1,8 @@
 package io.github.ilevs.p2pmusic.search
 
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.jsoup.Jsoup
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -10,6 +13,28 @@ import org.libtorrent4j.TorrentInfo
  * RUTRACKER_PASSWORD environment variables (GitHub secrets in CI). Skipped without them.
  */
 class RuTrackerLiveTest {
+    // What each address answers to a library and to a browser-like client, to read in the CI log:
+    // ilia's proxy got Cloudflare's "Just a moment..." (HTTP 403) on 2026-11-28.
+    @Test
+    fun printsWhatTheSiteAnswers() {
+        assumeTrue("LIVE_TESTS is not set", System.getenv("LIVE_TESTS") == "true")
+        val plain = OkHttpClient()
+        val browserLike = trackerHttpClient(proxy = null)
+        for (host in listOf("rutracker.org", "rutracker.net", "rutracker.nl")) {
+            for ((label, client) in listOf("plain" to plain, "browser-like" to browserLike)) {
+                val answer =
+                    runCatching {
+                        client.newCall(Request.Builder().url("https://$host/forum/index.php").build()).execute().use {
+                            val title = Jsoup.parse(String(checkNotNull(it.body).bytes(), Charsets.ISO_8859_1)).title()
+                            val headers = "cf-mitigated=${it.header("cf-mitigated")}, server=${it.header("server")}"
+                            "HTTP ${it.code}, $headers, $title"
+                        }
+                    }
+                println("ANSWER $host $label: ${answer.getOrElse { it.toString() }}")
+            }
+        }
+    }
+
     @Test
     fun searchesAndDownloadsATorrent() {
         val login = System.getenv("RUTRACKER_LOGIN").orEmpty()
