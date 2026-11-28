@@ -24,6 +24,7 @@ const val SOULSEEK = "Soulseek"
 // Enough folders to show, and the most the list shows.
 private const val ENOUGH_FOLDERS = 10
 private const val MAX_FOLDERS = 30
+private const val ALBUM_TRACKS = 3
 
 data class SearchState(
     val results: List<SearchResult> = emptyList(),
@@ -90,9 +91,9 @@ class SearchController(
             runCatching {
                 check(user.soulseekLogin.isNotBlank()) { "впишите логин в Настройках, раздел Soulseek" }
                 soulseek.connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding)
-                // Whole albums before folders with a single track; stable, so a free slot still leads within.
+                // Albums before stray tracks; stable, so a free slot and speed still lead within each.
                 audioFolders(soulseek.search(query) { audioFolders(it).size >= ENOUGH_FOLDERS })
-                    .sortedByDescending { it.size }
+                    .sortedByDescending { it.size >= ALBUM_TRACKS }
                     .take(MAX_FOLDERS)
             }
         val list = found.getOrDefault(emptyList())

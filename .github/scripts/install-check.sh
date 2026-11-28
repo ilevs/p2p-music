@@ -301,3 +301,49 @@ fi
 adb exec-out screencap -p > screen-soulseek.png
 adb shell pidof "$package" > /dev/null || fail "The app died while playing from Soulseek"
 echo "::endgroup::"
+
+# The releases tab with the trackers still failing: it must list Soulseek folders, and a tapped folder must play.
+echo "::group::Play a Soulseek folder from the releases tab"
+python3 "$here/tap.py" "Пауза" > /dev/null
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Раздачи" || fail "No releases tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+adb shell input keyevent KEYCODE_MOVE_END
+adb shell input keyevent $(for _ in $(seq 60); do printf '67 '; done)
+adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+searched=$(date +%s)
+for _ in $(seq 30); do
+  sleep 2
+  python3 "$here/tap.py" "Soulseek · " > /dev/null && break
+done || {
+  adb shell cat /sdcard/ui.xml | grep -oE 'text="[^"]+"' | head -30
+  fail "The releases tab lists no Soulseek folder"
+}
+metric soulseek_releases_search_s "$searched"
+tapped=$(date +%s)
+playing=
+for _ in $(seq 180); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
+    playing=yes
+    break
+  fi
+done
+if [ -n "$playing" ]; then
+  metric soulseek_folder_tap_to_sound_s "$tapped"
+  sleep 6
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  position="$(adb shell cat /sdcard/ui.xml | grep -o 'text="[0-9]*:[0-9]* / [^"]*"' | head -1)"
+  echo "Position after 6 s: $position"
+  if [ -z "$position" ] || echo "$position" | grep -q 'text="0:0[0-2] /'; then playing=; fi
+fi
+if [ -z "$playing" ]; then
+  adb exec-out screencap -p > screen-soulseek-folder.png
+  echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -60
+  fail "The Soulseek folder from the releases tab does not play"
+fi
+adb exec-out screencap -p > screen-soulseek-folder.png
+adb shell pidof "$package" > /dev/null || fail "The app died while playing a Soulseek folder"
+echo "::endgroup::"
