@@ -5,6 +5,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -125,6 +126,35 @@ class TorrentReaderTest {
         assertEquals(Priority.IGNORE, handle.filePriority(fileIndex("scans.bin")))
     }
 
+    // What a downloaded album needs to play offline: the .torrent cache and the files on disk, no peer.
+    @Test
+    fun playsFromDiskWithoutPeersAfterARestart() {
+        val ref = TorrentRef(hash, trackIndex())
+        readAll(TorrentReader(engine, ref, 0))
+        engine.close()
+        engine = TorrentEngine(File(temp.root, "engine"), localSettings())
+        val started = System.nanoTime()
+        assertTrue(prefetchStart(engine, ref, CACHE_TIMEOUT_MS) { false })
+        println("METRIC cached_track_start_ms=${(System.nanoTime() - started) / NANOS_IN_MS}")
+        assertArrayEquals(track, readAll(TorrentReader(engine, ref, 0)))
+    }
+
+    // A skipped album must not download: the prefetch sets piece deadlines and leaves the file unselected.
+    @Test
+    fun prefetchFetchesTheStartWithoutSelectingTheFile() {
+        val ref = TorrentRef(hash, trackIndex())
+        assertTrue(prefetchStart(engine, ref, CACHE_TIMEOUT_MS) { false })
+        assertEquals(Priority.IGNORE, engine.handle(hash).filePriority(trackIndex()))
+    }
+
+    @Test
+    fun prefetchStopsWhenAnotherAlbumIsTapped() {
+        TorrentEngine(temp.newFolder(), localSettings()).use { other ->
+            other.openTorrent(torrentBytes)
+            assertFalse(prefetchStart(other, TorrentRef(hash, trackIndex()), CACHE_TIMEOUT_MS) { true })
+        }
+    }
+
     private fun trackIndex(): Int = fileIndex(TRACK_NAME)
 
     private fun fileIndex(name: String): Int = (0 until info.numFiles()).first { info.files().fileName(it) == name }
@@ -159,5 +189,7 @@ class TorrentReaderTest {
         const val BUFFER_SIZE = 10_000
         const val SEED_TIMEOUT_MS = 30_000L
         const val POLL_MS = 50L
+        const val CACHE_TIMEOUT_MS = 10_000L
+        const val NANOS_IN_MS = 1_000_000
     }
 }

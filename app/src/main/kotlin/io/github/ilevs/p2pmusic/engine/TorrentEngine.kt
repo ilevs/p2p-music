@@ -187,7 +187,8 @@ class TorrentEngine(
         return requireNotNull(find(hash))
     }
 
-    private fun awaitUntil(
+    /** Blocks until [condition] holds, re-checked on every alert, or [timeoutMs] passes; true if it held. */
+    fun awaitUntil(
         timeoutMs: Long,
         condition: () -> Boolean,
     ): Boolean {
