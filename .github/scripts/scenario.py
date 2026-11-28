@@ -55,7 +55,10 @@ def album_titles(artist):
     texts = [t for t in (n.get("text", "") for n in nodes()) if t]
     titles = []
     for before, details in zip(texts, texts[1:]):
-        if (details == artist or details.startswith(artist + " · ")) and before not in UI_TEXTS + titles:
+        is_details = details == artist or details.startswith(artist + " · ")
+        # A row's own "artist · year" line is not the title of the row after it.
+        after_details = before.startswith(artist + " · ")
+        if is_details and not after_details and before not in UI_TEXTS + titles:
             titles.append(before)
     return titles
 
@@ -153,12 +156,16 @@ def come_back(played):
     print(f"METRIC return_to_album_sound_s={seconds:.0f}" if seconds is not None else "METRIC return_to_album_sound_s=none")
 
 
-def hop_quickly():
-    """Taps HOPS albums of one artist HOP_PAUSE_S apart; the last one tapped must be the one that plays."""
-    titles = search(ARTISTS[0])[:HOPS]
-    if len(titles) < 2:
-        print("Quick hops: too few albums listed")
+def hop_quickly(played):
+    """Taps two albums that played, of one artist, back and forth HOPS times HOP_PAUSE_S apart; the last one tapped
+    must be the one that plays."""
+    artist = next((a for a in ARTISTS if len(played.get(a, [])) >= 2), None)
+    if artist is None:
+        print("Quick hops: no artist with two albums that played")
+        print("METRIC hop_last_album_to_sound_s=none")
         return True
+    search(artist)
+    titles = [played[artist][i % 2] for i in range(HOPS)]
     adb("logcat", "-c")
     for title in titles:
         tap("Поиск", exact=True)
@@ -178,6 +185,6 @@ def hop_quickly():
 
 if __name__ == "__main__":
     heard = listen_in_turn()
-    right = hop_quickly()
+    right = hop_quickly(heard)
     come_back(heard)
     sys.exit(0 if right else 1)

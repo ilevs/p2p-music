@@ -60,6 +60,11 @@ class TorrentEngine(
         // Ask every tracker of a magnet at once, not tier by tier, so the metadata comes from the fastest one.
         settings.setBoolean(settings_pack.bool_types.announce_to_all_trackers.swigValue(), true)
         settings.setBoolean(settings_pack.bool_types.announce_to_all_tiers.swigValue(), true)
+        // No queue: libtorrent runs 3 downloading torrents at once by default, and prefetched releases could pause
+        // the one that plays.
+        settings.setInteger(settings_pack.int_types.active_downloads.swigValue(), -1)
+        settings.setInteger(settings_pack.int_types.active_seeds.swigValue(), -1)
+        settings.setInteger(settings_pack.int_types.active_limit.swigValue(), -1)
     }
 
     // Signalled on every alert we listen to; waiters re-check their condition after it.
@@ -123,12 +128,10 @@ class TorrentEngine(
 
     /**
      * Starts fetching the metadata of [magnet] before the user taps it, so that [openMagnet] finds it there.
-     * Downloads no file. Not queued by libtorrent, which runs only a few auto-managed torrents at once and could
-     * pause the playing one. Over [MAX_PREFETCHED], the oldest never opened one is removed, with its peers.
+     * Downloads no file. Over [MAX_PREFETCHED], the oldest never opened one is removed, with its peers.
      */
     fun prefetch(magnet: String) {
-        val params = parseMagnet(magnet)
-        val hash = params.infoHashes.best.toHex()
+        val hash = parseMagnet(magnet).infoHashes.best.toHex()
         synchronized(prefetched) {
             if (prefetched.remove(hash)) {
                 prefetched += hash
@@ -143,13 +146,9 @@ class TorrentEngine(
                 find(oldest)?.let { session.remove(it) }
             }
         }
-        params.savePath = downloadsDir.absolutePath
-        params.flags =
-            params.flags
-                .and_(TorrentFlags.AUTO_MANAGED.inv())
-                .and_(TorrentFlags.PAUSED.inv())
-                .or_(TorrentFlags.DEFAULT_DONT_DOWNLOAD)
-        session.swig().async_add_torrent(params.swig())
+        // Added as openMagnet adds it: a magnet added with its own flags got no metadata from NNM-Club in 25 s, three
+        // CI runs out of three, where openMagnet's got it in 4-6 s (2026-11-28).
+        if (!addCached(hash)) session.download(magnet, downloadsDir, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
     }
 
     /** Adds a .torrent file (or finds it in the session) and caches it. */
