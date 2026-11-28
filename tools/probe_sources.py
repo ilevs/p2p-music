@@ -14,7 +14,7 @@ ALBUMS = [
 ]
 
 
-def get(url, data=None, headers=None, timeout=25):
+def get(url, data=None, headers=None, timeout=12):
     h = {"User-Agent": UA, "Accept-Encoding": "gzip"}
     h.update(headers or {})
     req = urllib.request.Request(url, data=data, headers=h)
@@ -126,8 +126,11 @@ def rutracker_api():
     print(f"METRIC rutracker_api_music_forums={len(music_forums)}")
     total, t_all = 0, 0.0
     sample_ids = []
-    for f in music_forums:
-        c, b, d = get(f"{base}/static/pvc/f/{f}", timeout=60)
+    from concurrent.futures import ThreadPoolExecutor
+    t0 = time.time()
+    fetched = list(ThreadPoolExecutor(16).map(lambda f: get(f"{base}/static/pvc/f/{f}", timeout=20), music_forums))
+    print(f"METRIC rutracker_api_pvc_wall_16_parallel_s={time.time() - t0:.1f}")
+    for c, b, d in fetched:
         t_all += d
         try:
             res = json.loads(b)["result"]
@@ -149,21 +152,27 @@ def rutracker_api():
 
 
 def main():
+    rutracker_api()
     code, dt, title = rutracker_page()
     print(f"rutracker.org tracker.php: HTTP {code} {dt:.2f}s title={title!r}")
     sums = {}
+    from concurrent.futures import ThreadPoolExecutor
+    pool = ThreadPoolExecutor(16)
     for artist, album in ALBUMS:
-        print(f"\n== {artist} / {album}")
+        print(f"\n== {artist} / {album}", flush=True)
+        jobs = []
         for name, fn in [
             ("jacred_xyz", lambda q: jacred(q, "jacred.xyz")), ("jac_red", lambda q: jacred(q, "jac.red")),
             ("rutor", rutor), ("apibay", apibay), ("knaben", knaben), ("nnm", nnm), ("kinozal", kinozal),
         ]:
             for label, q in [("artist", artist), ("exact", f"{artist} {album}")]:
-                r = fn(q)
+                jobs.append((name, label, pool.submit(fn, q)))
+        for name, label, fut in jobs:
+                r = fut.result()
                 code, dt, titles = r[0], r[1], r[2]
                 n, na, nb = hits(titles, artist, album)
                 extra = f" trackers={r[3]}" if len(r) > 3 else ""
-                print(f"  {name:10} {label:6} HTTP {code} {dt:5.2f}s results={n} with_artist={na} with_album={nb}{extra}")
+                print(f"  {name:10} {label:6} HTTP {code} {dt:5.2f}s results={n} with_artist={na} with_album={nb}{extra}", flush=True)
                 s = sums.setdefault((name, label), [0, 0, 0.0, 0])
                 s[0] += na; s[1] += 1 if nb else 0; s[2] += dt; s[3] += 1
     print()
@@ -171,7 +180,6 @@ def main():
         print(f"METRIC probe_{name}_{label}_with_artist_total={na}")
         print(f"METRIC probe_{name}_{label}_albums_found={found}/{k}")
         print(f"METRIC probe_{name}_{label}_avg_s={t / k:.2f}")
-    rutracker_api()
 
 
 main()
