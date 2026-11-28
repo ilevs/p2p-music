@@ -243,7 +243,7 @@ playing=
 for _ in $(seq 180); do
   sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"'; then
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
     playing=yes
     break
   fi
@@ -251,7 +251,7 @@ for _ in $(seq 180); do
 done
 # "Пауза" shows only while the player renders audio; the position must also move.
 if [ -n "$playing" ]; then
-  echo "METRIC soulseek_album_tap_to_sound_s=$(( $(date +%s) - tapped ))"
+  metric soulseek_album_tap_to_sound_s "$tapped"
   sleep 6
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   position="$(adb shell cat /sdcard/ui.xml | grep -o 'text="[0-9]*:[0-9]* / [^"]*"' | head -1)"
