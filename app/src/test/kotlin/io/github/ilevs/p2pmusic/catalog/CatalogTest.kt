@@ -21,7 +21,7 @@ class CatalogTest {
         val albums = MusicBrainz(OkHttpClient(), server.url("/ws/2/")).searchAlbums("кино группа крови")
         assertEquals(listOf(Album("6a1c", "Группа крови", "Кино & Друзья", "1988")), albums)
         val request = server.takeRequest()
-        assertTrue(request.getHeader("User-Agent").orEmpty().startsWith("P2PMusic/"))
+        assertTrue(request.getHeader("User-Agent").orEmpty().startsWith("Peerlude/"))
         assertEquals("/ws/2/release-group", request.requestUrl?.encodedPath)
         server.shutdown()
     }

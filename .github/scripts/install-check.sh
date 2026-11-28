@@ -3,7 +3,7 @@
 set -u
 apk="$1"
 published="${2:-}"
-package=io.github.ilevs.p2pmusic
+package=io.github.ilevs.peerlude
 
 adb shell getprop ro.build.version.release
 adb shell getprop ro.product.cpu.abilist
@@ -16,7 +16,9 @@ if [ -n "$published" ] && [ -f "$published" ]; then
     adb logcat -d | grep -iE "PackageManager|PackageInstaller|NativeLibrary|NativeHelper" | tail -40
     echo "::warning::The published APK does not install on API $(adb shell getprop ro.build.version.sdk)"
   fi
+  # The published APK may still carry the id from before the rename.
   adb uninstall "$package" > /dev/null 2>&1 || true
+  adb uninstall io.github.ilevs.p2pmusic > /dev/null 2>&1 || true
   echo "::endgroup::"
 fi
 

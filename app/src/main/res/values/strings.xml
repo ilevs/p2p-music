@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <string name="app_name">P2P Music</string>
+  <string name="app_name">Peerlude</string>
   <string name="magnet_label">Magnet-ссылка</string>
   <string name="open">Открыть</string>
   <string name="loading_metadata">Ищу пиров и список файлов…</string>
