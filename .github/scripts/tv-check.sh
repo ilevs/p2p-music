@@ -23,7 +23,8 @@ fail() {
   echo "::error::$1"
   exit 1
 }
-key() { adb shell input keyevent "$@"; sleep 1; }
+# Remote keys: UP, DOWN, LEFT, RIGHT, CENTER, BACK.
+key() { python3 "$here/dpad.py" press "$@"; sleep 1; }
 dpad() { python3 "$here/dpad.py" "$@"; }
 screen() { adb shell uiautomator dump /sdcard/ui.xml > /dev/null; adb shell cat /sdcard/ui.xml; }
 metric() {
@@ -52,24 +53,25 @@ adb exec-out screencap -p > screen-tv-start.png
 
 echo "::group::Search with the remote"
 dpad "Артист, альбом" DOWN 6 || dpad "Артист, альбом" RIGHT 4 || fail "The search field cannot be reached by remote"
-key KEYCODE_DPAD_CENTER
+# Focus alone opens the on-screen keyboard; OK opens it when it was closed.
+adb shell dumpsys input_method | grep -q "mInputShown=true" || key CENTER
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
 # Back hides the on-screen keyboard; without one it would leave the app.
-adb shell dumpsys input_method | grep -q "mInputShown=true" && key KEYCODE_BACK
+adb shell dumpsys input_method | grep -q "mInputShown=true" && key BACK
 adb exec-out screencap -p > screen-tv-query.png
 dpad "Найти" RIGHT 3 || dpad "Найти" DOWN 3 || fail "The search button cannot be reached by remote"
-key KEYCODE_DPAD_CENTER
+key CENTER
 searched=$(date +%s)
 for i in $(seq 60); do
   sleep 1
   # MusicBrainz answers 503 to the runners' shared addresses at times: search again, as a user would.
-  [ $((i % 15)) -eq 0 ] && key KEYCODE_DPAD_CENTER
+  [ $((i % 15)) -eq 0 ] && key CENTER
   screen | grep -q 'text="Pink Floyd · 1973"' && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
 metric tv_search_to_albums_s "$searched"
 dpad "Pink Floyd · 1973" DOWN 15 || fail "The album row cannot be reached by remote"
 adb exec-out screencap -p > screen-tv-album-focused.png
-key KEYCODE_DPAD_CENTER
+key CENTER
 tapped=$(date +%s)
 echo "::endgroup::"
 
@@ -80,7 +82,7 @@ for _ in $(seq 90); do
   screen | grep -qiE 'text="[^"]*(Breathe|Time)' && break
 done || fail "The album's tracks do not show"
 dpad "Breathe" DOWN 12 || dpad "Breathe" RIGHT 4 || fail "No track can be reached by remote"
-key KEYCODE_DPAD_CENTER
+key CENTER
 for _ in $(seq 90); do
   sleep 1
   playing && break
@@ -92,19 +94,19 @@ echo "::endgroup::"
 
 echo "::group::Pause, resume and seek with the remote"
 dpad "Пауза" UP 12 || fail "The pause button cannot be reached by remote"
-key KEYCODE_DPAD_CENTER
+key CENTER
 sleep 2
 screen | grep -q 'content-desc="Играть"' || fail "OK on the pause button does not pause"
 paused="$(position)"
 sleep 3
 [ "$(position)" = "$paused" ] || fail "The position moves while paused"
-key KEYCODE_DPAD_CENTER
+key CENTER
 sleep 2
 playing || fail "OK on the play button does not resume"
 dpad "class:android.widget.SeekBar" UP 3 || fail "The seek bar cannot be reached by remote"
 before="$(position)"
-# shellcheck disable=SC2046  # one key code per word
-key $(printf 'KEYCODE_DPAD_RIGHT %.0s' $(seq 10))
+# shellcheck disable=SC2046  # one key per word
+key $(printf 'RIGHT %.0s' $(seq 10))
 after=
 for _ in $(seq 30); do
   sleep 1
@@ -117,7 +119,7 @@ echo "::endgroup::"
 
 echo "::group::Settings with the remote"
 dpad "Настройки" LEFT 4 || dpad "Настройки" DOWN 4 || fail "The settings tab cannot be reached by remote"
-key KEYCODE_DPAD_CENTER
+key CENTER
 dpad "Логин" RIGHT 3 || dpad "Логин" DOWN 3 || fail "The settings fields cannot be reached by remote"
 dpad "Сохранить" DOWN 20 || fail "The save button cannot be reached by remote"
 adb exec-out screencap -p > screen-tv-settings.png

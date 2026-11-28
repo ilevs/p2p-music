@@ -1,9 +1,19 @@
 """Moves the D-pad focus until the focused element shows <target>, pressing <key> (UP, DOWN, LEFT, RIGHT) up to <max>
 times. <target> is a text or content description the focused element or its children contain, or "class:<name>".
-Prints what is focused at each step. Usage: dpad.py <target> <key> [max]."""
+Prints what is focused at each step. Usage: dpad.py <target> <key> [max], or dpad.py press <key>...: presses keys."""
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+
+# Linux key codes of the emulator's hardware keyboard, which Android reads as a D-pad like a TV remote's.
+# "adb shell input" keys come from a virtual device, and Compose text fields ignore D-pad keys from those.
+CODES = {"UP": 103, "DOWN": 108, "LEFT": 105, "RIGHT": 106, "CENTER": 232, "BACK": 158}
+
+
+def press(key):
+    code = CODES[key]
+    subprocess.run(["adb", "emu", "event", "send", f"EV_KEY:{code}:1", "EV_SYN:0:0", f"EV_KEY:{code}:0", "EV_SYN:0:0"],
+                   check=True, capture_output=True)
 
 
 def labels(node):
@@ -27,6 +37,10 @@ def matches(node, target):
 
 
 def main():
+    if sys.argv[1] == "press":
+        for key in sys.argv[2:]:
+            press(key)
+        return 0
     target, key = sys.argv[1], sys.argv[2]
     presses = int(sys.argv[3]) if len(sys.argv) > 3 else 10
     for i in range(presses + 1):
@@ -36,7 +50,7 @@ def main():
         if matches(node, target):
             return 0
         if i < presses:
-            subprocess.run(["adb", "shell", "input", "keyevent", f"KEYCODE_DPAD_{key}"], check=True)
+            press(key)
     print(f"No focus on {target} after {presses} presses of {key}")
     return 1
 
