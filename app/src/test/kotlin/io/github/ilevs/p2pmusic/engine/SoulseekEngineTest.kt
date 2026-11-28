@@ -72,7 +72,8 @@ class SoulseekEngineTest {
 
     @Test(expected = SoulseekStalledException::class)
     fun aUserWhoSendsNothingStopsTheWaitWithAnError() {
-        val engine = SoulseekEngine(Files.createTempDirectory("soulseek").toFile()) { FakeApi() }
+        val api = FakeApi()
+        val engine = SoulseekEngine(Files.createTempDirectory("soulseek").toFile()) { api }
         val file = SoulseekFile("queued", "a\\01.mp3", 100)
         engine.download(file)
         engine.awaitBytes(file, 0, 300)
