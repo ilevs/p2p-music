@@ -69,7 +69,7 @@
   <string name="soulseek_no_login">enter a login in Settings, Soulseek section</string>
   <string name="soulseek_folders">folders: %1$d, below</string>
   <string name="soulseek_folder_details">Soulseek · %1$s · tracks: %2$d</string>
-  <string name="soulseek_folder_stalled">Soulseek: none of the %1$d users with the folder “%2$s” started sending, pick another one</string>
+  <string name="soulseek_folder_stalled">Soulseek: no one with the folder “%2$s” started sending (users tried: %1$d), pick another one</string>
   <string name="soulseek_download_refused">Soulseek didn’t accept the download of %1$s</string>
   <string name="soulseek_download_broke">Soulseek: the download of %1$s broke off</string>
   <string name="soulseek_user_stalled">Soulseek: %1$s didn’t start sending %2$s</string>
