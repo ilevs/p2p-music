@@ -52,6 +52,11 @@ def main():
         if i < presses:
             press(key)
     print(f"No focus on {target} after {presses} presses of {key}")
+    # Which device and source the last keys came from, and whether the on-screen keyboard took them.
+    dump = subprocess.run(["adb", "shell", "dumpsys", "input"], capture_output=True, text=True).stdout
+    print("\n".join(line.strip()[:200] for line in dump.splitlines() if "KeyEvent" in line or "mInputShown" in line)[-3000:])
+    ime = subprocess.run(["adb", "shell", "dumpsys", "input_method"], capture_output=True, text=True).stdout
+    print("\n".join(line.strip() for line in ime.splitlines() if "mInputShown" in line or "mCurMethodId" in line))
     return 1
 
 

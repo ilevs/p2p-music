@@ -12,6 +12,8 @@ echo "Package $package"
 adb shell getprop ro.build.version.release
 adb shell getprop ro.product.cpu.abilist
 adb shell pm list features | grep -E "leanback|touchscreen" || true
+# The emulator's keyboard is the remote: its keys must report a D-pad source.
+adb shell dumpsys input | grep -E "^\s+[0-9]+: |Sources:|KeyboardType" | head -30
 
 fail() {
   adb exec-out screencap -p > screen-tv-failed.png
