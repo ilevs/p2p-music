@@ -73,6 +73,8 @@ class TorrentEngine(
                                 AlertType.ADD_TORRENT.swig(),
                                 AlertType.METADATA_RECEIVED.swig(),
                                 AlertType.PIECE_FINISHED.swig(),
+                                // The prefetch waits for it before it narrows a file to its first pieces.
+                                AlertType.FILE_PRIO.swig(),
                             )
 
                         override fun alert(alert: Alert<*>) {

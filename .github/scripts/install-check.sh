@@ -280,6 +280,8 @@ fi
 adb exec-out screencap -p > screen-nnm-album.png
 echo "Texts with the NNM-Club album:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -40
 [ -n "$playing" ] || fail "The album that only NNM-Club has does not play"
+# A stopped torrent plays what it already has: 2 of the 8 runs that passed here on 2026-11-28 showed "End of file".
+adb shell cat /sdcard/ui.xml | grep -q 'text="Ошибка: ' && fail "The NNM-Club album plays, but the screen shows an error"
 metric nnm_album_tap_to_sound_s "$tapped"
 # Then back to the album before, as a user who changed his mind: its release is already in the session and its
 # first pieces on disk, so it must play without opening anything again.

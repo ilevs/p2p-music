@@ -1,10 +1,13 @@
 package io.github.ilevs.p2pmusic.engine
 
 import org.libtorrent4j.Priority
+import org.libtorrent4j.TorrentHandle
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+
+private const val PRIORITY_TIMEOUT_MS = 2_000L
 
 /**
  * Reads one file of a torrent while it downloads, starting at [startPosition]. Blocking.
@@ -44,7 +47,8 @@ class TorrentReader(
         val album = File(files.filePath(ref.fileIndex)).parent
         for (i in 0 until files.numFiles()) {
             val isAlbumTrack = File(files.filePath(i)).parent == album && isAudioFile(files.fileName(i))
-            if (isAlbumTrack && handle.filePriority(i) == Priority.IGNORE) handle.filePriority(i, Priority.DEFAULT)
+            // Below DEFAULT, not only IGNORE: the prefetch leaves the files it touched at LOW.
+            if (isAlbumTrack && handle.filePriority(i) < Priority.DEFAULT) handle.filePriority(i, Priority.DEFAULT)
         }
         // With nothing selected the torrent announced itself as complete, and trackers send no seeds to a seed.
         if (wasIdle) {
@@ -101,8 +105,8 @@ class TorrentReader(
 }
 
 /**
- * Fetches what a player reads first from [ref], the reader's window at its start and its tail, without selecting
- * the file, so an album the user skipped past costs a few MB, not a download. True once they are on disk, false
+ * Fetches what a player reads first from [ref], the reader's window at its start and its tail, and nothing else
+ * of the file, so an album the user skipped past costs a few MB, not a download. True once they are on disk, false
  * after [timeoutMs] or as soon as [stop] holds.
  */
 fun prefetchStart(
@@ -119,9 +123,33 @@ fun prefetchStart(
     val window = span.deadlineWindow(span.pieceAt(0)) + (span.lastPiece to 0)
     val pieces = window.map { it.first }
     val wasIdle = handle.status().isFinished
-    // A deadline raises a piece out of the "don't download" priority the torrent was added with.
+    selectOnly(engine, handle, pieces.toSet())
     window.filterNot { handle.havePiece(it.first) }.forEach { (piece, ms) -> handle.setPieceDeadline(piece, ms) }
     // As in TorrentReader: trackers send no seeds to a torrent that announced itself complete.
     if (wasIdle) handle.forceReannounce()
     return engine.awaitUntil(timeoutMs) { stop() || pieces.all(handle::havePiece) } && !stop()
+}
+
+// libtorrent keeps the data of unselected files in a part file, and a track tapped while a piece there is half
+// written fails to move it out: "End of file", and the torrent pauses for good. So the unselected files under
+// [window] are selected at the lowest priority, and their pieces outside it are switched off instead.
+private fun selectOnly(
+    engine: TorrentEngine,
+    handle: TorrentHandle,
+    window: Set<Int>,
+) {
+    val info = handle.torrentFile()
+    val files = info.files()
+    val pieces =
+        (0 until files.numFiles())
+            .filter { files.fileSize(it) > 0 && !files.padFileAt(it) }
+            .associateWith { FileSpan(files.fileOffset(it), files.fileSize(it), info.pieceLength()) }
+            .mapValues { (_, span) -> span.pieceAt(0)..span.lastPiece }
+    val (unselected, selected) = pieces.keys.partition { handle.filePriority(it) == Priority.IGNORE }
+    val touched = unselected.filter { file -> window.any { it in pieces.getValue(file) } }
+    touched.forEach { handle.filePriority(it, Priority.LOW) }
+    // libtorrent applies file priorities to the pieces in a callback, which would undo the lines below.
+    engine.awaitUntil(PRIORITY_TIMEOUT_MS) { touched.none { handle.filePriority(it) == Priority.IGNORE } }
+    val wanted = selected.flatMapTo(window.toMutableSet()) { pieces.getValue(it) }
+    touched.flatMap { pieces.getValue(it) }.minus(wanted).forEach { handle.piecePriority(it, Priority.IGNORE) }
 }
