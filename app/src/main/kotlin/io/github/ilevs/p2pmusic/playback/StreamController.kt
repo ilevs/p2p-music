@@ -312,8 +312,8 @@ class StreamController(
 }
 
 // Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds.
-// Not in the class: detekt caps its functions.
-private fun prefetchFirstTrack(
+// Not in the class: detekt caps its functions. Not private: called from a lambda, and lint forbids synthetic accessors.
+internal fun prefetchFirstTrack(
     engine: TorrentEngine,
     album: OpenedAlbum,
     stop: () -> Boolean,
