@@ -329,9 +329,10 @@ internal fun prefetchTrack(
     index: Int,
     stop: () -> Boolean,
 ): Boolean {
+    val first = album.files.getOrNull(index) ?: album.files.firstOrNull()
     // Soulseek files: the race already got their opening bytes.
-    val hash = album.hash ?: return true
-    val first = album.files.getOrNull(index) ?: album.files.firstOrNull() ?: return true
+    val hash = album.hash
+    if (hash == null || first == null) return true
     val started = SystemClock.elapsedRealtime()
     // A failure here only means the player waits for the track, as it did before.
     val ready = runCatching { prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS, stop) }
