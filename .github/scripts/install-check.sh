@@ -350,8 +350,10 @@ python3 "$here/tap.py" "Найти" || fail "No search button"
 searched=$(date +%s)
 for _ in $(seq 30); do
   sleep 2
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Soulseek · ' && break
   # The trackers' errors above the list can push it below a small screen.
-  tap_scrolling "Soulseek · " && break
+  adb shell input swipe 160 500 160 150 300
 done || {
   adb shell cat /sdcard/ui.xml | grep -oE 'text="[^"]+"' | head -30
   fail "The releases tab lists no Soulseek folder"
