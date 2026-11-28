@@ -2,6 +2,7 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
+import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.parseAlbums
 import io.github.ilevs.p2pmusic.playback.AudioFile
@@ -159,11 +160,7 @@ class CatalogController(
         album: Album,
         why: String,
     ): OpenedAlbum {
-        val user = settings.load()
-        if (user.soulseekLogin.isBlank()) {
-            throw IOException("$why. Впишите логин Soulseek в настройках, чтобы искать и там")
-        }
-        val soulseek = stream.soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
+        val soulseek = connectSoulseek(settings, stream.soulseek, why)
         val folders =
             soulseekFolders(
                 album,
@@ -231,4 +228,17 @@ class CatalogController(
             mutableState.update { it.copy(isLoading = false, message = message) }
         }
     }
+}
+
+// Outside the class, which is at detekt's function limit.
+private fun connectSoulseek(
+    settings: SettingsStore,
+    soulseek: SoulseekEngine,
+    why: String,
+): SoulseekEngine {
+    val user = settings.load()
+    if (user.soulseekLogin.isBlank()) {
+        throw IOException("$why. Впишите логин Soulseek в настройках, чтобы искать и там")
+    }
+    return soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
 }
