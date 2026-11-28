@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -41,6 +42,7 @@ private enum class Tab(
     Search(R.string.tab_search, Icons.Filled.Search),
     Player(R.string.tab_player, Icons.Filled.PlayArrow),
     Settings(R.string.tab_settings, Icons.Filled.Settings),
+    Debug(R.string.tab_debug, Icons.Filled.Build),
 }
 
 @Composable
@@ -119,7 +121,7 @@ private fun TabContent(
         }
 
         Tab.Player -> {
-            StreamScreen(graph.stream, modifier)
+            StreamScreen(graph.stream, graph.catalog, modifier)
         }
 
         Tab.Settings -> {
@@ -130,6 +132,10 @@ private fun TabContent(
                 onSave = { graph.engine.setSeeding(it.seeding) },
                 modifier = modifier,
             )
+        }
+
+        Tab.Debug -> {
+            DebugScreen(graph.stream, modifier)
         }
     }
 }

@@ -19,6 +19,11 @@
   <string name="tab_search">Поиск</string>
   <string name="tab_player">Плеер</string>
   <string name="tab_settings">Настройки</string>
+  <string name="tab_debug">Отладка</string>
+  <string name="source">Источник: %1$s</string>
+  <string name="sources_searching">Ищу раздачи…</string>
+  <string name="source_current">Сейчас · %1$s</string>
+  <string name="soulseek_details">Папки пользователей, звук через 40–120 с</string>
   <string name="search_label">Артист, альбом</string>
   <string name="search">Найти</string>
   <string name="albums">Альбомы</string>
