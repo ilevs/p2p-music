@@ -93,21 +93,34 @@ def opened_name(title):
     return found[-1] if found else None
 
 
-def plays(title):
-    """Whether the player plays the release opened for [title] now."""
+def shows(title):
+    """Whether the player lists the release opened for the album [title] now."""
     name = opened_name(title)
-    if name is None:
-        return False
-    playing = re.findall("playing «(.*)»", adb("logcat", "-d", "-s", "p2pmusic:I"))
-    return bool(playing) and playing[-1] == name and any(n.get("content-desc") == "Пауза" for n in nodes())
+    shown = re.findall("shows «(.*)»", adb("logcat", "-d", "-s", "p2pmusic:I"))
+    return name is not None and bool(shown) and shown[-1] == name
+
+
+def first_track():
+    """The node of the listed album's first track, or None."""
+    return next((n for n in nodes() if n.get("content-desc", "").startswith("Трек 1. ")), None)
 
 
 def wait_sound(title):
-    """Seconds from now until [title] plays, or None after SOUND_WAIT_S."""
+    """Seconds from now until the album [title] is listed, its first track tapped at once and heard; None after
+    SOUND_WAIT_S. Nothing plays on an album tap alone (ilia, 2026-11-28), so the scenario taps the track as a user does."""
     start = time.time()
+    track = None
     while time.time() - start < SOUND_WAIT_S:
-        if plays(title):
-            return time.time() - start
+        if track is None and shows(title):
+            node = first_track()
+            if node is not None:
+                track = node.get("content-desc")[len("Трек 1. "):]
+                tap_node(node)
+        elif track is not None:
+            screen = nodes()
+            # The playing title shows above the list too, so twice on screen is the one that plays.
+            if any(n.get("content-desc") == "Пауза" for n in screen) and [n.get("text") for n in screen].count(track) >= 2:
+                return time.time() - start
         time.sleep(1)
     return None
 
@@ -170,17 +183,22 @@ def hop_quickly(played):
     for title in titles:
         tap("Поиск", exact=True)
         tap(title, exact=True)
+        last_tap = time.time()
         time.sleep(HOP_PAUSE_S)
     last = titles[-1]
-    seconds = wait_sound(last)
-    # Earlier taps may finish after the last; whichever plays at the end must be the last one tapped.
+    # Earlier taps may finish after the last; the album listed at the end must be the last one tapped.
+    deadline = time.time() + SOUND_WAIT_S
+    while time.time() < deadline and not shows(last):
+        time.sleep(1)
     time.sleep(5)
-    right = plays(last) if seconds is not None else None
+    right = shows(last)
+    # From the last tap, as the user feels it.
+    seconds = time.time() - last_tap if right and wait_sound(last) is not None else None
     print(adb("logcat", "-d", "-s", "p2pmusic:I")[-3000:])
     print(f"METRIC hop_last_album_to_sound_s={seconds:.0f}" if seconds is not None else "METRIC hop_last_album_to_sound_s=none")
-    if right is False:
+    if not right:
         print(f"::error::After quick hops the player plays another album than the last tapped «{last}»")
-    return right is not False
+    return right
 
 
 if __name__ == "__main__":
