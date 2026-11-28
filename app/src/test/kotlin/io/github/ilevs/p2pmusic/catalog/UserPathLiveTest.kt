@@ -75,10 +75,8 @@ class UserPathLiveTest {
             val runs =
                 List(NNM_RUNS) {
                     val (_, coldMs) =
-                        TorrentEngine(temp.newFolder()).use { engine ->
-                            timed { runCatching { nnm.open(nnmPick, engine) } }
-                        }
-                    coldMs to warmOpenMs(nnm, nnmPick)
+                        launched().use { engine -> timed { runCatching { nnm.open(nnmPick, engine) } } }
+                    coldMs to warmOpenMs(nnm, nnmPick, launched())
                 }
             println("NNM cold/warm ms: $runs")
             println("METRIC nnm_release_open_cold_ms=${runs.map { it.first }.sorted()[NNM_RUNS / 2]}")
@@ -96,11 +94,19 @@ class UserPathLiveTest {
     private fun warmOpenMs(
         source: TorrentSource,
         pick: SearchResult,
+        started: TorrentEngine = TorrentEngine(temp.newFolder()),
     ): Long =
-        TorrentEngine(temp.newFolder()).use { engine ->
+        started.use { engine ->
             source.prefetch(pick, engine)
             Thread.sleep(USER_LOOKS_MS)
             timed { runCatching { source.open(pick, engine) } }.second
+        }
+
+    // An engine as the app has it at a tap: the session started at launch and the DHT up.
+    private fun launched(): TorrentEngine =
+        TorrentEngine(temp.newFolder()).also { engine ->
+            engine.setSeeding(true)
+            engine.awaitUntil(DHT_WAIT_MS) { engine.dhtNodes > 0 }
         }
 
     private fun <T> timed(block: () -> T): Pair<T, Long> {
@@ -114,5 +120,6 @@ class UserPathLiveTest {
         // shortcut: a guess at how long a user reads the album list; measure it on a device if the numbers matter.
         const val USER_LOOKS_MS = 5_000L
         const val NNM_RUNS = 3
+        const val DHT_WAIT_MS = 15_000L
     }
 }
