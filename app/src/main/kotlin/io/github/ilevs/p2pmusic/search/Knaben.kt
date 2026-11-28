@@ -36,7 +36,12 @@ class Knaben(
                 .put("size", MAX_RESULTS)
                 .put("hide_unsafe", false)
                 .put("hide_xxx", true)
-        val request = Request.Builder().url(apiUrl).post(body.toString().toRequestBody(JSON)).build()
+        val request =
+            Request
+                .Builder()
+                .url(apiUrl)
+                .post(body.toString().toRequestBody(JSON))
+                .build()
         return parseKnabenSearch(String(get(request)))
     }
 
