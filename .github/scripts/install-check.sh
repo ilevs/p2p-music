@@ -289,6 +289,8 @@ metric album_return_to_sound_s "$returned"
 liked='Убрать из моих альбомов: Pink Floyd — Wish You Were Here'
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "В мои альбомы: Pink Floyd — Wish You Were Here" || fail "No like button on the album row"
+# Settings are written to disk a moment after the tap; force-stop at once would lose them, as no user does.
+sleep 3
 adb shell am force-stop "$package"
 adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
 for _ in $(seq 20); do
