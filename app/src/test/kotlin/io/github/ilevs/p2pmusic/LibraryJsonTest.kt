@@ -22,7 +22,21 @@ class LibraryJsonTest {
         assertEquals(saved, saved.toJson().put("torrent", "ZDE6YWU=").toSavedAlbum())
     }
 
+    @Test
+    fun historyKeepsLikedAlbumsPastItsSize() {
+        val history = (0..LIBRARY_LIMIT).map { SavedAlbum(Album("$it", "", "", ""), "$it") }
+        assertEquals(history, trimHistory(history, setOf("$LIBRARY_LIMIT")))
+        assertEquals(history.dropLast(1), trimHistory(history, emptySet()))
+    }
+
+    @Test
+    fun likedAlbumsSurviveTheRoundTrip() {
+        val albums = listOf(Album("1", "Группа крови", "Кино", "1988", "https://e/c.jpg"))
+        assertEquals(albums, parseAlbums(JSONArray(albums.map { it.toJson() }).toString()))
+    }
+
     private companion object {
+        const val LIBRARY_LIMIT = 100
         const val HASH_LENGTH = 40
     }
 }

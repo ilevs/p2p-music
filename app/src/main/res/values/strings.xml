@@ -25,6 +25,9 @@
   <string name="albums">Альбомы</string>
   <string name="releases">Раздачи</string>
   <string name="library">Мои альбомы</string>
+  <string name="history">История прослушивания</string>
+  <string name="like">В мои альбомы: %1$s</string>
+  <string name="unlike">Убрать из моих альбомов: %1$s</string>
   <string name="export_library">Сохранить в файл</string>
   <string name="import_library">Загрузить из файла</string>
   <string name="result_details">%1$s · %2$.0f МБ · Сиды: %3$d</string>
