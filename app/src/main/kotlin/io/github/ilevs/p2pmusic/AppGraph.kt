@@ -8,9 +8,12 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import io.github.ilevs.p2pmusic.catalog.CatalogController
 import io.github.ilevs.p2pmusic.catalog.MusicBrainz
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
+import io.github.ilevs.p2pmusic.engine.SoulseekStalledException
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.playback.SoulseekDataSource
 import io.github.ilevs.p2pmusic.playback.StreamController
@@ -56,7 +59,8 @@ class AppGraph(
         ExoPlayer
             .Builder(context)
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(SoulseekDataSource.Factory(soulseek, TorrentDataSource.Factory(engine))),
+                DefaultMediaSourceFactory(SoulseekDataSource.Factory(soulseek, TorrentDataSource.Factory(engine)))
+                    .setLoadErrorHandlingPolicy(NoRetryOnStall),
             ).setLoadControl(
                 DefaultLoadControl
                     .Builder()
@@ -104,4 +108,15 @@ class AppGraph(
         return trackerClient?.takeIf { it.first == proxy }?.second
             ?: trackerHttpClient(proxy, cookies).also { trackerClient = proxy to it }
     }
+}
+
+// The player retries a failed read four times: after a user sent nothing for two minutes, that kept
+// "Загружаю трек…" up for about nine minutes before the error showed. Asking the same user again does not help.
+@OptIn(UnstableApi::class)
+private object NoRetryOnStall : DefaultLoadErrorHandlingPolicy() {
+    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
+        when (loadErrorInfo.exception) {
+            is SoulseekStalledException -> C.TIME_UNSET
+            else -> super.getRetryDelayMsFor(loadErrorInfo)
+        }
 }

@@ -141,9 +141,8 @@ class CatalogController(
             folders
                 .take(RACE_SIZE * RACE_ROUNDS)
                 .chunked(RACE_SIZE)
-                .firstNotNullOfOrNull { round ->
-                    soulseek.race(round.map { it.first() }, RACE_MS)?.let { winner -> round.first { it[0] == winner } }
-                } ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
+                .firstNotNullOfOrNull { round -> soulseek.raceFolders(round, RACE_MS) }
+                ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
         tracks.drop(1).forEach { runCatching { soulseek.download(it) } }
         return OpenedAlbum(null, album.title, tracks.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
     }

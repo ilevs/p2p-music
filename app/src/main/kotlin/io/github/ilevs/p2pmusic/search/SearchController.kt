@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 /** [SearchResult.source] of a Soulseek folder. */
 const val SOULSEEK = "Soulseek"
@@ -72,11 +73,15 @@ class SearchController(
         result: SearchResult,
         engine: TorrentEngine,
     ): OpenedAlbum {
-        val tapped = folders[result.id] ?: return torrentAlbum(source.open(result, engine), null)
+        if (result.id !in folders) return torrentAlbum(source.open(result, engine), null)
         // One user often keeps us queued for minutes; the same release under the same folder name sits with others.
         val twins = folders.values.filter { folderResult(it).title.equals(result.title, ignoreCase = true) }
-        val winner = soulseek.race(twins.map { it[0] }, RACE_MS)
-        val files = twins.firstOrNull { it[0] == winner } ?: tapped.also { soulseek.download(it[0]) }
+        // Waiting on without a sender would spin forever, so say so and let the user pick another folder.
+        val files =
+            soulseek.raceFolders(twins, RACE_MS)
+                ?: throw IOException(
+                    "$SOULSEEK: никто из ${twins.size} с папкой «${result.title}» не начал отдавать, выберите другую",
+                )
         // In order: the user sends them one after another, so each next track is on disk before it is needed.
         files.drop(1).forEach { runCatching { soulseek.download(it) } }
         return OpenedAlbum(null, result.title, files.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
