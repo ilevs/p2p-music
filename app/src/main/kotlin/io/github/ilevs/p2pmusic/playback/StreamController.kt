@@ -16,6 +16,7 @@ import io.github.ilevs.p2pmusic.catalog.albumFiles
 import io.github.ilevs.p2pmusic.catalog.coverUrl
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
+import io.github.ilevs.p2pmusic.engine.TorrentReader
 import io.github.ilevs.p2pmusic.engine.TorrentRef
 import io.github.ilevs.p2pmusic.engine.isAudioFile
 import io.github.ilevs.p2pmusic.engine.parseTorrentUri
@@ -35,9 +36,14 @@ import kotlinx.coroutines.withContext
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.TorrentHandle
 import java.io.IOException
+import java.util.logging.Logger
 
 private const val STATS_INTERVAL_MS = 1_000L
 private const val SAVE_INTERVAL_MS = 5_000L
+private const val PREFETCH_MS = 30_000L
+
+// Shows in logcat under the tag "p2pmusic", as the catalog's release tries do.
+private val log = Logger.getLogger("p2pmusic")
 
 data class AudioFile(
     val index: Int,
@@ -150,13 +156,16 @@ class StreamController(
         coverUrl: String?,
         open: () -> OpenedAlbum,
     ) {
-        // The album before must not stay in the player while the next one loads, or after it failed to open.
-        player.stop()
-        player.clearMediaItems()
+        // The track before plays on while this album opens (seconds for a torrent, a minute for Soulseek) and
+        // until its first track has its opening bytes; then the album replaces it, or a failure stops it.
+        val wasPlaying = player.isPlaying
         mutableState.update { StreamState(isLoading = true) }
         val mine = ++opens
         scope.launch {
-            val result = runCatching { withContext(io) { open() } }
+            val result =
+                runCatching {
+                    withContext(io) { open().also { if (autoplay && wasPlaying) prefetchFirstTrack(it) } }
+                }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
             result
@@ -168,9 +177,25 @@ class StreamController(
                     watchStats()
                     if (autoplay) files.firstOrNull()?.let(::play)
                 }.onFailure { error ->
+                    // The album before must not stay in the player after the tapped one failed to open.
+                    player.stop()
+                    player.clearMediaItems()
                     mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
                 }
         }
+    }
+
+    // Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS.
+    private fun prefetchFirstTrack(album: OpenedAlbum) {
+        val hash = album.hash ?: return
+        val first = album.files.firstOrNull() ?: return
+        val started = SystemClock.elapsedRealtime()
+        // A failure here only means the player waits for the track, as it did before.
+        val ready =
+            runCatching {
+                TorrentReader(engine, TorrentRef(hash, first.index), 0L).use { it.awaitStart(PREFETCH_MS) }
+            }
+        log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
     }
 
     /** The opened torrent's audio files as a queue, for the player, the notification and the car. */

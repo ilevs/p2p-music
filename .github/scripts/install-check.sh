@@ -200,15 +200,18 @@ for _ in $(seq 20); do
   python3 "$here/tap.py" "Pink Floyd · " && break
 done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
 switched=$(date +%s)
+# The first album plays on while the second opens: the silence is the time from its last sound to the second's.
+last_sound=$switched
 playing=
 for _ in $(seq 90); do
   sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
-    adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
+  adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' || continue
+  if adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
     playing=yes
     break
   fi
+  last_sound=$(date +%s)
 done
 if [ -z "$playing" ]; then
   adb exec-out screencap -p > screen-second-album.png
@@ -216,6 +219,9 @@ if [ -z "$playing" ]; then
   fail "The second album does not play after the first"
 fi
 metric album_switch_to_sound_s "$switched"
+metric album_switch_silence_s "$last_sound"
+# The first album used to stop at the tap, so the silence was the whole switch.
+[ $(($(date +%s) - last_sound)) -le 10 ] || fail "The first album went silent long before the second played"
 adb exec-out screencap -p > screen-second-album.png
 # Then an album that only NNM-Club had on 2026-11-28 (Rutor and Knaben find nothing), so the release comes
 # from the fallback source, by the magnet of its topic. A Latin name: "input text" types ASCII only.

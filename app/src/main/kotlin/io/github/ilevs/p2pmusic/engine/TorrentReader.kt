@@ -75,6 +75,10 @@ class TorrentReader(
         return read
     }
 
+    /** Waits up to [timeoutMs] for the pieces a player reads first, the one at the position and the tail. */
+    fun awaitStart(timeoutMs: Long): Boolean =
+        engine.awaitUntil(timeoutMs) { handle.havePiece(span.pieceAt(position)) && handle.havePiece(span.lastPiece) }
+
     override fun close() {
         if (handle.isValid) {
             deadlinePieces.filterNot(handle::havePiece).forEach(handle::resetPieceDeadline)
