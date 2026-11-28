@@ -71,22 +71,7 @@ fun SearchScreen(
         modifier = modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text(stringResource(R.string.search_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { search() }),
-                modifier = Modifier.weight(1f),
-            )
-            Button(
-                onClick = search,
-                enabled = query.isNotBlank() && !isLoading,
-                modifier = Modifier.padding(start = 8.dp),
-            ) { Text(stringResource(R.string.search)) }
-        }
+        SearchBar(query = query, onQuery = { query = it }, enabled = !isLoading, onSearch = search)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = showAlbums,
@@ -122,6 +107,26 @@ fun SearchScreen(
 }
 
 /** Albums when [albums] is not null, otherwise tracker [results]. */
+@Composable
+private fun SearchBar(query: String, onQuery: (String) -> Unit, enabled: Boolean, onSearch: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQuery,
+            label = { Text(stringResource(R.string.search_label)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            modifier = Modifier.weight(1f),
+        )
+        Button(
+            onClick = onSearch,
+            enabled = query.isNotBlank() && enabled,
+            modifier = Modifier.padding(start = 8.dp),
+        ) { Text(stringResource(R.string.search)) }
+    }
+}
+
 @Composable
 private fun SearchResults(
     albums: List<Album>?,
