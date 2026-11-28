@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.useEnglishTexts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -7,6 +8,10 @@ import java.io.IOException
 import java.io.InterruptedIOException
 
 class AllSourcesTest {
+    init {
+        useEnglishTexts()
+    }
+
     private class FakeSource(
         override val name: String,
         private val results: () -> List<SearchResult>,
@@ -30,7 +35,7 @@ class AllSourcesTest {
     fun reportsTheErrorWhenNothingIsFound() {
         val empty = FakeSource("Rutor") { emptyList() }
         val error = assertThrows(IOException::class.java) { AllSources(listOf(blocked, empty)).search("Кино") }
-        assertEquals("RuTracker: Cloudflare; Rutor: ничего не найдено", error.message)
+        assertEquals("RuTracker: Cloudflare; Rutor: nothing found", error.message)
     }
 
     @Test
@@ -63,6 +68,6 @@ class AllSourcesTest {
             }
         val error =
             assertThrows(IOException::class.java) { AllSources(listOf(slow)).torrentFile(found.copy(source = "Rutor")) }
-        assertEquals("Rutor: .torrent не скачался: timeout", error.message)
+        assertEquals("Rutor: .torrent didn’t download: timeout", error.message)
     }
 }

@@ -1,7 +1,9 @@
 package io.github.ilevs.p2pmusic.engine
 
+import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.engine.SoulseekApi.Companion.FAILED
 import io.github.ilevs.p2pmusic.engine.SoulseekApi.Companion.QUEUED
+import io.github.ilevs.p2pmusic.text
 import java.io.File
 import java.io.IOException
 import java.net.URLDecoder
@@ -133,7 +135,7 @@ class SoulseekEngine(
 
             else -> {
                 api().download(file.user, file.path, file.size, folderOf(file).path).also {
-                    if (it == FAILED) throw IOException("Soulseek не принял загрузку ${file.name}")
+                    if (it == FAILED) throw IOException(text(R.string.soulseek_download_refused, file.name))
                     downloads[file] = it
                 }
             }
@@ -187,13 +189,18 @@ class SoulseekEngine(
 // The server's reasons for a refused login, in the user's words; any other shows as the server put it.
 private val LoginReasons =
     mapOf(
-        "INVALIDPASS" to "неверный пароль, или это имя уже занял кто-то другой",
-        "INVALIDUSERNAME" to "такое имя нельзя, нужно латиницей и не длиннее 30 знаков",
-        "SVRFULL" to "сервер переполнен, попробуйте позже",
+        "INVALIDPASS" to R.string.soulseek_invalid_password,
+        "INVALIDUSERNAME" to R.string.soulseek_invalid_username,
+        "SVRFULL" to R.string.soulseek_server_full,
     )
 
 internal fun loginError(error: String): String =
-    "Soulseek: " + (LoginReasons.entries.firstOrNull { it.key in error }?.value ?: error)
+    "Soulseek: " + (
+        LoginReasons.entries
+            .firstOrNull { it.key in error }
+            ?.value
+            ?.let { text(it) } ?: error
+    )
 
 // Names come from strangers: no separators, no "..", and short enough for the file system.
 internal fun safeName(text: String): String =
@@ -218,13 +225,12 @@ internal fun SoulseekEngine.awaitBytes(
             }
 
             have == FAILED -> {
-                throw IOException("Soulseek: загрузка ${file.name} прервалась")
+                throw IOException(text(R.string.soulseek_download_broke, file.name))
             }
 
             System.currentTimeMillis() > deadline -> {
-                throw SoulseekStalledException(
-                    "Soulseek: ${file.user} не начал отдавать ${file.name}" + if (have == QUEUED) ", очередь" else "",
-                )
+                val id = if (have == QUEUED) R.string.soulseek_user_queued else R.string.soulseek_user_stalled
+                throw SoulseekStalledException(text(id, file.user, file.name))
             }
         }
         Thread.sleep(POLL_MS)

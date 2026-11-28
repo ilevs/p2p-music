@@ -5,6 +5,7 @@
 - Talk to the owner in Russian. Code, comments, commits and PR titles stay in English.
 - Architecture: one `:app` module split into packages (`engine`, `playback`, `search`, `catalog`, `library`, `ui`), manual wiring in `AppGraph`, no DI framework. libtorrent4j downloads, Media3 plays, `TorrentDataSource` connects them.
 - The app runs standalone on a phone or a car head unit: no servers, no Google Play Services. minSdk 26 (Android 8.1 head units), native libs for arm64-v8a, armeabi-v7a, x86 and x86_64.
+- Languages: English and Russian; the app follows the system language (or the per-app language on Android 13+). Every text the user sees is a string resource: English in `res/values/strings.xml` (the default), Russian in `res/values-ru/strings.xml`, never a literal in Kotlin. Compose reads it with `stringResource`, code without a Context with `text(R.string.x, args)`. Lint fails on a string missing from either file. A new language is one more `values-xx/strings.xml`. `install-check.sh` runs in Russian and repeats the path to sound in English.
 - Linters fail the build: ktlint, detekt with all rules, Android Lint with warnings as errors, Kotlin warnings as errors. Fix the code, do not suppress, unless a rule is clearly wrong for one line, and then say why next to the suppression.
 - Every merged PR to `main` publishes a release APK through `.github/workflows/release.yml`.
 

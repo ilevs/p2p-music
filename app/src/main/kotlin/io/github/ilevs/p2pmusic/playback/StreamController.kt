@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import io.github.ilevs.p2pmusic.LastPlayed
+import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.catalog.albumFiles
@@ -22,6 +23,7 @@ import io.github.ilevs.p2pmusic.engine.parseTorrentUri
 import io.github.ilevs.p2pmusic.engine.prefetchStart
 import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.engine.trackerCounts
+import io.github.ilevs.p2pmusic.text
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -243,7 +245,7 @@ class StreamController(
         } else {
             // Without this the player just sits at 0:00 with no reason on screen.
             val reason = error.cause?.message ?: error.errorCodeName
-            mutableState.update { it.copy(error = "Трек не играет: $reason") }
+            mutableState.update { it.copy(error = text(R.string.track_failed, reason)) }
         }
     }
 
@@ -340,7 +342,7 @@ internal fun listAudio(
             .sortedBy { it.name }
     val name = info.name()
     val ofAlbum = if (album == null) files else albumFiles(album, name, files)
-    if (album != null && ofAlbum.isEmpty()) throw IOException("В раздаче «$name» нет альбома «$album»")
+    if (album != null && ofAlbum.isEmpty()) throw IOException(text(R.string.album_not_in_release, name, album))
     return name to ofAlbum
 }
 

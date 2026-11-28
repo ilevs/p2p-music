@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.useEnglishTexts
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
@@ -10,6 +11,10 @@ import org.junit.Test
 import java.nio.charset.Charset
 
 class RuTrackerTest {
+    init {
+        useEnglishTexts()
+    }
+
     private val cp1251 = Charset.forName("windows-1251")
     private val server = MockWebServer().apply { start() }
     private val client = trackerHttpClient(proxy = null, cookieJar = MemoryCookieJar())
@@ -56,7 +61,7 @@ class RuTrackerTest {
         server.enqueue(page("<input name=\"cap_sid\" value=\"x\">"))
         val error = runCatching { tracker.login() }.exceptionOrNull()
         assertTrue(error is TrackerLoginException)
-        assertTrue(error?.message.orEmpty().contains("капч"))
+        assertTrue(error?.message.orEmpty().contains("captcha"))
     }
 
     @Test
@@ -69,7 +74,7 @@ class RuTrackerTest {
     fun tellsAForeignPageFromABadPassword() {
         server.enqueue(page("<title>Доступ ограничен</title>").setResponseCode(403))
         val message = runCatching { tracker.login() }.exceptionOrNull()?.message.orEmpty()
-        assertTrue(message, message.contains("«Доступ ограничен» (HTTP 403)"))
+        assertTrue(message, message.contains("“Доступ ограничен” (HTTP 403)"))
     }
 
     @Test
@@ -78,7 +83,7 @@ class RuTrackerTest {
         repeat(2) { server.enqueue(page("<title>Just a moment...</title>").setResponseCode(403)) }
         val atLogin = runCatching { tracker.login() }.exceptionOrNull()?.message.orEmpty()
         val atSearch = runCatching { tracker.search("кино") }.exceptionOrNull()?.message.orEmpty()
-        assertTrue(atLogin, "Cloudflare" in atLogin && "прокси" !in atLogin)
+        assertTrue(atLogin, "Cloudflare" in atLogin && "proxy" !in atLogin)
         assertTrue(atSearch, "Cloudflare" in atSearch)
     }
 

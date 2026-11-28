@@ -1,5 +1,7 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.R
+import io.github.ilevs.p2pmusic.text
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -18,10 +20,7 @@ private const val HTTP_FORBIDDEN = 403
 
 // Measured from a CI runner on 2026-11-28: the front page opens, but login.php and tracker.php answer with
 // Cloudflare's browser check on rutracker.org and rutracker.net, whatever headers the client sends.
-// So neither "check the proxy" nor "take another proxy" is honest advice.
-private const val CLOUDFLARE_CHECK =
-    "RuTracker: вход и поиск на сайте закрыты проверкой Cloudflare «Я не робот», её проходит только браузер. " +
-        "Приложение открыть RuTracker не может, поиск идёт по остальным источникам"
+// So neither "check the proxy" nor "take another proxy" is honest advice: R.string.rutracker_cloudflare.
 
 data class Credentials(
     val login: String,
@@ -77,7 +76,7 @@ class RuTracker(
 
     /** Logs in with the saved account; throws [TrackerLoginException] with a message for the user. */
     fun login() {
-        val account = credentials() ?: throw TrackerLoginException("Укажите логин и пароль RuTracker в настройках")
+        val account = credentials() ?: throw TrackerLoginException(text(R.string.rutracker_no_login))
         val form =
             listOf("login_username" to account.login, "login_password" to account.password, "login" to "Вход")
                 .joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, Cp1251.name())}" }
@@ -95,11 +94,11 @@ class RuTracker(
         val error =
             when {
                 LOGGED_IN_MARKER in page -> null
-                CAPTCHA_MARKER in page -> "RuTracker просит капчу: войдите один раз через браузер"
+                CAPTCHA_MARKER in page -> text(R.string.rutracker_captcha)
                 !siteError.isNullOrBlank() -> "RuTracker: $siteError"
-                "login_username" in page -> "RuTracker не принял логин или пароль"
-                isCloudflareCheck(code, page) -> CLOUDFLARE_CHECK
-                else -> "Вместо RuTracker пришла страница «${html.title()}» (HTTP $code). Проверьте прокси"
+                "login_username" in page -> text(R.string.rutracker_bad_login)
+                isCloudflareCheck(code, page) -> text(R.string.rutracker_cloudflare)
+                else -> text(R.string.rutracker_foreign_page, html.title(), code)
             }
         if (error != null) throw TrackerLoginException(error)
     }
@@ -109,7 +108,13 @@ class RuTracker(
     private fun getBytes(url: HttpUrl): ByteArray =
         client().newCall(Request.Builder().url(url).build()).execute().use { response ->
             val bytes = checkNotNull(response.body).bytes()
-            if (isCloudflareCheck(response.code, String(bytes, Cp1251))) throw IOException(CLOUDFLARE_CHECK)
+            if (isCloudflareCheck(
+                    response.code,
+                    String(bytes, Cp1251),
+                )
+            ) {
+                throw IOException(text(R.string.rutracker_cloudflare))
+            }
             if (!response.isSuccessful) throw IOException("RuTracker: HTTP ${response.code}")
             bytes
         }

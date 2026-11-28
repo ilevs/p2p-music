@@ -1,5 +1,7 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.R
+import io.github.ilevs.p2pmusic.text
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -52,8 +54,7 @@ class NnmClub(
             ?.attr("href")
             ?: throw IOException("NNM-Club: no magnet in topic ${result.id}")
 
-    override fun torrentFile(result: SearchResult): ByteArray =
-        throw IOException("NNM-Club отдаёт .torrent только после входа")
+    override fun torrentFile(result: SearchResult): ByteArray = throw IOException(text(R.string.nnm_needs_login))
 
     private fun get(
         page: String,

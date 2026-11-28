@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.catalog.audioFolders
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
@@ -9,6 +10,7 @@ import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.playback.AudioFile
 import io.github.ilevs.p2pmusic.playback.OpenedAlbum
 import io.github.ilevs.p2pmusic.playback.torrentAlbum
+import io.github.ilevs.p2pmusic.text
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +60,7 @@ class SearchController(
             val torrents = runCatching { source.search(query) }
             val found = torrents.getOrDefault(emptyList()).sortedByDescending { it.seeds }
             if (found.isEmpty()) {
-                val trackers = torrents.exceptionOrNull()?.message ?: "${source.name}: ничего не найдено"
+                val trackers = torrents.exceptionOrNull()?.message ?: "${source.name}: ${text(R.string.nothing_found)}"
                 val (results, answer) = searchSoulseek(query)
                 // Soulseek first: a long tracker error is cut off on a small screen.
                 results to "$SOULSEEK: $answer. $trackers"
@@ -79,9 +81,7 @@ class SearchController(
         // Waiting on without a sender would spin forever, so say so and let the user pick another folder.
         val files =
             soulseek.raceFolders(twins, RACE_MS)
-                ?: throw IOException(
-                    "$SOULSEEK: никто из ${twins.size} с папкой «${result.title}» не начал отдавать, выберите другую",
-                )
+                ?: throw IOException(text(R.string.soulseek_folder_stalled, twins.size, result.title))
         // In order: the user sends them one after another, so each next track is on disk before it is needed.
         files.drop(1).forEach { runCatching { soulseek.download(it) } }
         return OpenedAlbum(null, result.title, files.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
@@ -90,7 +90,7 @@ class SearchController(
     fun checkLogin() {
         run {
             tracker.login()
-            state.value.results to "Вход в ${tracker.name} выполнен"
+            state.value.results to text(R.string.logged_in, tracker.name)
         }
     }
 
@@ -99,7 +99,7 @@ class SearchController(
         val user = settings.load()
         val found =
             runCatching {
-                check(user.soulseekLogin.isNotBlank()) { "впишите логин в Настройках, раздел Soulseek" }
+                check(user.soulseekLogin.isNotBlank()) { text(R.string.soulseek_no_login) }
                 soulseek.connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding)
                 // Albums before stray tracks; stable, so a free slot and speed still lead within each.
                 audioFolders(soulseek.search(query) { audioFolders(it).size >= ENOUGH_FOLDERS })
@@ -110,7 +110,7 @@ class SearchController(
         folders = list.associateBy(::folderId)
         val answer =
             found.exceptionOrNull()?.let { it.message ?: it.toString() }
-                ?: if (list.isEmpty()) "ничего не найдено" else "папок: ${list.size}, ниже"
+                ?: if (list.isEmpty()) text(R.string.nothing_found) else text(R.string.soulseek_folders, list.size)
         return list.map(::folderResult) to answer
     }
 
@@ -134,7 +134,7 @@ internal fun folderResult(folder: List<SoulseekFile>): SearchResult =
     SearchResult(
         id = folderId(folder),
         title = folder[0].folder.substringAfterLast('\\').substringAfterLast('/'),
-        category = "$SOULSEEK · ${folder[0].user} · треков: ${folder.size}",
+        category = text(R.string.soulseek_folder_details, folder[0].user, folder.size),
         sizeBytes = folder.sumOf(SoulseekFile::size),
         seeds = folder[0].freeSlots,
         leeches = 0,
