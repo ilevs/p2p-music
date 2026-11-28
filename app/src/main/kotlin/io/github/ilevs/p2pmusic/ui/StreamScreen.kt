@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -27,9 +28,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -74,6 +81,15 @@ private fun TrackList(
     modifier: Modifier = Modifier,
 ) {
     var magnet by rememberSaveable { mutableStateOf("") }
+    // A remote lands on the album's first track when it opens, not on the tabs. Touch focuses nothing, so phones
+    // see no change: the request fails there and is ignored.
+    val firstTrack = remember { FocusRequester() }
+    val firstIndex = state.files.firstOrNull()?.index
+    LaunchedEffect(firstIndex) {
+        if (firstIndex == null) return@LaunchedEffect
+        withFrameNanos {} // the list lays its rows out in the next frame
+        runCatching { firstTrack.requestFocus() }
+    }
     LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item { StatusText(state) }
         itemsIndexed(state.files, key = { _, file -> file.index }) { i, file ->
@@ -87,6 +103,7 @@ private fun TrackList(
                     Modifier
                         .fillMaxWidth()
                         .semantics { contentDescription = description }
+                        .then(if (i == 0) Modifier.focusRequester(firstTrack) else Modifier)
                         .clickable { controller.play(file) }
                         .padding(vertical = 12.dp),
             )
@@ -98,7 +115,15 @@ private fun TrackList(
                     onValueChange = { magnet = it },
                     label = { Text(stringResource(R.string.magnet_label)) },
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier =
+                        Modifier
+                            .weight(
+                                1f,
+                            ).remoteKeys(
+                                LocalFocusManager.current,
+                                LocalSoftwareKeyboardController.current,
+                                LocalInputModeManager.current,
+                            ),
                 )
                 Button(
                     onClick = { controller.open(magnet.trim()) },
