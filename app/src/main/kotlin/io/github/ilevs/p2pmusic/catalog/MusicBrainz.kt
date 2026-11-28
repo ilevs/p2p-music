@@ -10,20 +10,21 @@ import java.io.IOException
 
 // MusicBrainz asks every client to name itself and a contact.
 private const val USER_AGENT = "P2PMusic/0.1 ( https://github.com/ilevs/p2p-music )"
-private const val PAGE_SIZE = "25"
-private const val YEAR_LENGTH = 4
+internal const val PAGE_SIZE = "25"
+internal const val YEAR_LENGTH = 4
 private const val ATTEMPTS = 5
 
-/** An album (MusicBrainz release group). */
+/** An album: a MusicBrainz release group, or a Deezer or iTunes album, whose id starts with "deezer:" or "itunes:". */
 data class Album(
     val id: String,
     val title: String,
     val artist: String,
     val year: String,
+    val cover: String = "",
 )
 
-/** Front cover from the Cover Art Archive, 250 px. */
-val Album.coverUrl: String get() = "https://coverartarchive.org/release-group/$id/front-250"
+/** Front cover, 250 px: the store's own, else the Cover Art Archive's. */
+val Album.coverUrl: String get() = cover.ifEmpty { "https://coverartarchive.org/release-group/$id/front-250" }
 
 /** Album search on musicbrainz.org: free, no account. Blocking. */
 class MusicBrainz(

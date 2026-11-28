@@ -85,7 +85,7 @@ private val Collection =
     )
 
 // Trackers and the catalog spell "ё" both ways.
-private fun normalize(text: String): String {
+internal fun normalize(text: String): String {
     val words = text.lowercase().replace('ё', 'е').replace(NonWord, " ")
     return " " + words.trim() + " "
 }
