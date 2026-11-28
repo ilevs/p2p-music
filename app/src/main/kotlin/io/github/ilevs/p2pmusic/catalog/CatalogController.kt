@@ -3,6 +3,8 @@ package io.github.ilevs.p2pmusic.catalog
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.playback.StreamController
+import io.github.ilevs.p2pmusic.playback.listAudio
+import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.search.open
 import io.github.ilevs.p2pmusic.toJson
@@ -49,37 +51,40 @@ class CatalogController(
         }
     }
 
-    /** Plays from the library when the album was played before (works offline), else from a new release. */
+    /**
+     * Plays from the library when the album was played before (works offline), else from a new release.
+     * The search runs as part of the player's open, so the player drops the album before at once
+     * and shows this one loading, then playing or the reason it was not found.
+     */
     fun play(album: Album) {
-        run {
+        stream.openHandle(
+            album.title,
+            album.coverUrl,
+            // Saved only once the torrent proved to hold the album: the artist search can pick one without it.
+            onOpened = { hash ->
+                settings.addToLibrary(SavedAlbum(album, hash))
+                mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
+            },
+        ) {
             val saved = settings.library().firstOrNull { it.album.id == album.id }
-            if (saved != null) {
-                stream.openHandle(album.title, album.coverUrl) { stream.engine.handle(saved.hash) }
-            } else {
-                // A release of the album itself, else a discography found by the artist alone;
-                // a failed first search still tries the second, which reports the error.
-                val exact = runCatching { source.search("${album.artist} ${album.title}") }
-                val pick =
-                    pickTorrent(album, exact.getOrDefault(emptyList()))
-                        ?: pickTorrent(
-                            album,
-                            runCatching { source.search(album.artist) }.getOrElse {
-                                throw IOException("Альбом «${album.title}» не найден. ${it.message}", it)
-                            },
-                        )
-                        ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
-                stream.openHandle(
-                    album.title,
-                    album.coverUrl,
-                    // Saved only once the torrent proved to hold the album: the artist search can pick one without it.
-                    onOpened = { hash ->
-                        settings.addToLibrary(SavedAlbum(album, hash))
-                        mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
-                    },
-                ) { source.open(pick, stream.engine) }
-            }
-            null
+            // Older versions saved releases that do not hold the album; such a one is searched for again.
+            val kept = runCatching { saved?.let { stream.engine.handle(it.hash) }?.also { listAudio(it, album.title) } }
+            kept.getOrNull() ?: source.open(findRelease(album), stream.engine)
         }
+    }
+
+    // A release of the album itself, else a discography found by the artist alone;
+    // a failed first search still tries the second, which reports the error.
+    private fun findRelease(album: Album): SearchResult {
+        val exact = runCatching { source.search("${album.artist} ${album.title}") }
+        return pickTorrent(album, exact.getOrDefault(emptyList()))
+            ?: pickTorrent(
+                album,
+                runCatching { source.search(album.artist) }.getOrElse {
+                    throw IOException("Альбом «${album.title}» не найден. ${it.message}", it)
+                },
+            )
+            ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
     }
 
     /** Writes the library with each album's .torrent, so another device plays it without the tracker. */

@@ -78,6 +78,7 @@ class StreamController(
 
     @Volatile
     private var hash: String? = null
+    private var opens = 0
     private var startClock = 0L
     private var seekClock = 0L
     private var statsJob: Job? = null
@@ -129,10 +130,26 @@ class StreamController(
         onOpened: (hash: String) -> Unit = {},
         open: () -> TorrentHandle,
     ) {
+        // The album before must not stay in the player while the next one loads, or after it failed to open.
+        player.stop()
+        player.clearMediaItems()
         mutableState.update { StreamState(isLoading = true) }
+        val mine = ++opens
         scope.launch {
-            runCatching { withContext(io) { listAudio(open(), album).also { hash?.let(onOpened) } } }
-                .onSuccess { (name, files) ->
+            val result =
+                runCatching {
+                    withContext(io) {
+                        val handle = open()
+                        val opened = handle.infoHash().toHex()
+                        (opened to listAudio(handle, album)).also { onOpened(opened) }
+                    }
+                }
+            // A slower open of an album tapped earlier must not replace the one tapped after it.
+            if (mine != opens) return@launch
+            result
+                .onSuccess { (opened, listed) ->
+                    hash = opened
+                    val (name, files) = listed
                     mutableState.update {
                         it.copy(torrentName = name, files = files, isLoading = false, coverUrl = coverUrl)
                     }
@@ -223,6 +240,7 @@ class StreamController(
         val (name, files) =
             runCatching { withContext(io) { listAudio(engine.handle(spot.hash), saved?.album?.title) } }.getOrNull()
                 ?: return null
+        hash = spot.hash
         mutableState.update { StreamState(torrentName = name, files = files, coverUrl = saved?.album?.coverUrl) }
         watchStats()
         val index = if (saved != null) 0 else files.indexOfFirst { it.index == spot.fileIndex }
@@ -233,25 +251,6 @@ class StreamController(
         } else {
             MediaSession.MediaItemsWithStartPosition(queueItems(), index, spot.positionMs)
         }
-    }
-
-    // With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.
-    private fun listAudio(
-        handle: TorrentHandle,
-        album: String? = null,
-    ): Pair<String, List<AudioFile>> {
-        hash = handle.infoHash().toHex()
-        val info = handle.torrentFile()
-        val storage = info.files()
-        val files =
-            (0 until storage.numFiles())
-                .filter { isAudioFile(storage.fileName(it)) }
-                .map { AudioFile(it, storage.filePath(it), storage.fileSize(it)) }
-                .sortedBy { it.name }
-        val name = info.name()
-        val ofAlbum = if (album == null) files else albumFiles(album, name, files)
-        if (album != null && ofAlbum.isEmpty()) throw IOException("В раздаче «$name» нет альбома «$album»")
-        return name to ofAlbum
     }
 
     private fun watchStats() {
@@ -280,4 +279,22 @@ class StreamController(
                 }
             }
     }
+}
+
+// With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.
+internal fun listAudio(
+    handle: TorrentHandle,
+    album: String? = null,
+): Pair<String, List<AudioFile>> {
+    val info = handle.torrentFile()
+    val storage = info.files()
+    val files =
+        (0 until storage.numFiles())
+            .filter { isAudioFile(storage.fileName(it)) }
+            .map { AudioFile(it, storage.filePath(it), storage.fileSize(it)) }
+            .sortedBy { it.name }
+    val name = info.name()
+    val ofAlbum = if (album == null) files else albumFiles(album, name, files)
+    if (album != null && ofAlbum.isEmpty()) throw IOException("В раздаче «$name» нет альбома «$album»")
+    return name to ofAlbum
 }
