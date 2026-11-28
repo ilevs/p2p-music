@@ -37,11 +37,15 @@ class SoulseekLiveTest {
         println("METRIC soulseek_search_ms=${searched - loggedIn}")
         println("Soulseek: ${files.size} files, ${folders.size} folders with the album, e.g. ${files.take(3)}")
         assertTrue("No folder with the album", folders.isNotEmpty())
-        val first = engine.race(folders.take(RACE_SIZE).map { it.first() }, RACE_MS)
+        // Two rounds, as the app races: some users refuse within seconds, often everyone in one round.
+        val first =
+            folders.take(RACE_SIZE * 2).chunked(RACE_SIZE).firstNotNullOfOrNull { round ->
+                engine.race(round.map { it.first() }, RACE_MS)
+            }
         val raced = System.currentTimeMillis()
         println("METRIC soulseek_first_bytes_ms=${raced - searched}")
         println("Soulseek: first bytes from ${first?.user}")
-        checkNotNull(first) { "None of ${folders.take(RACE_SIZE).map { it[0].user }} started sending" }
+        checkNotNull(first) { "None of ${folders.take(RACE_SIZE * 2).map { it[0].user }} started sending" }
         val have = engine.awaitBytes(first, BYTES, RACE_MS)
         println("METRIC soulseek_256kb_ms=${System.currentTimeMillis() - searched}")
         println("Soulseek: ${have / KB} KB of ${first.name}")
@@ -70,7 +74,7 @@ class SoulseekLiveTest {
     fun disconnect() = SoulseekEngine(temp.root).disconnect()
 
     private companion object {
-        const val TIMEOUT_MS = 180_000L
+        const val TIMEOUT_MS = 240_000L
         const val RACE_SIZE = 5
         const val RACE_MS = 60_000L
         const val BYTES = 256 * 1024L
