@@ -217,6 +217,37 @@ if [ -z "$playing" ]; then
 fi
 metric album_switch_to_sound_s "$switched"
 adb exec-out screencap -p > screen-second-album.png
+# Then an album that only NNM-Club had on 2026-11-28 (Rutor and Knaben find nothing), so the release comes
+# from the fallback source, by the magnet of its topic. A Latin name: "input text" types ASCII only.
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
+adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+adb shell input text "Little%sBig%sAntipositive"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for i in $(seq 40); do
+  sleep 1
+  [ $((i % 15)) -eq 0 ] && python3 "$here/tap.py" "Найти" > /dev/null
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -qi 'text="Antipositive' || continue
+  python3 "$here/tap.py" "Little Big · " && break
+done || fail "The catalog shows no Little Big album for Antipositive"
+tapped=$(date +%s)
+playing=
+for _ in $(seq 120); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  # The pause button alone could still be the previous album's.
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
+    ! adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
+    playing=yes
+    break
+  fi
+done
+adb exec-out screencap -p > screen-nnm-album.png
+echo "Texts with the NNM-Club album:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -40
+[ -n "$playing" ] || fail "The album that only NNM-Club has does not play"
+metric nnm_album_tap_to_sound_s "$tapped"
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
   adb logcat -d -b crash
