@@ -55,6 +55,7 @@ internal fun soulseekFolders(
 ): List<List<SoulseekFile>> {
     val artist = normalize(album.artist)
     val title = normalize(album.title)
+<<<<<<< HEAD
     return audioFolders(files.filter { artist in normalize(it.path) && title in normalize(it.folder) })
         .distinctBy { it[0].user }
 }
@@ -63,10 +64,19 @@ internal fun soulseekFolders(
 internal fun audioFolders(files: List<SoulseekFile>): List<List<SoulseekFile>> =
     files
         .filter { isAudioFile(it.name) }
+=======
+    return files
+        .filter { isAudioFile(it.name) && artist in normalize(it.path) && title in normalize(it.folder) }
+>>>>>>> 7772cb574ca3fdeae2ee7b736bc7fe2add74766f
         .groupBy { it.user to it.folder }
         .values
         .map { folder -> folder.sortedBy { it.name } }
         .sortedWith(compareByDescending<List<SoulseekFile>> { it[0].freeSlots > 0 }.thenByDescending { it[0].speed })
+<<<<<<< HEAD
+=======
+        .distinctBy { it[0].user }
+}
+>>>>>>> 7772cb574ca3fdeae2ee7b736bc7fe2add74766f
 
 /** Enough answers to start racing: that many users with the album and a free slot. */
 internal fun enoughToRace(
