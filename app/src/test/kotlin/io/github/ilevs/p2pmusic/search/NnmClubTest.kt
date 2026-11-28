@@ -5,6 +5,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NnmClubTest {
@@ -23,7 +24,10 @@ class NnmClubTest {
 
         val results = nnm.search("Кино Группа крови")
 
-        assertEquals("Кино Группа крови", server.takeRequest().requestUrl?.queryParameter("nm"))
+        val url = checkNotNull(server.takeRequest().requestUrl)
+        assertEquals("Кино Группа крови", url.queryParameter("nm"))
+        // "Русский рок" is asked for, a film forum is not.
+        assertTrue("332" in url.queryParameterValues("f[]") && "227" !in url.queryParameterValues("f[]"))
         val title = "Кино - Группа Крови (1988) Reissue, Remastered, 1996, Moroz Records [OGG Vorbis] <Rock>"
         assertEquals(listOf(SearchResult("1578218", title, "Русский рок", 172_680_341L, 4, 0)), results)
     }
