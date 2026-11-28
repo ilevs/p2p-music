@@ -6,6 +6,21 @@ published="${2:-}"
 package=io.github.ilevs.p2pmusic
 
 adb shell getprop ro.build.version.release
+sdk="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+
+# The checks below read the Russian texts, and emulators start in English: switch the system to Russian, as on
+# ilia's phone. English, the default, gets its own run below. Emulator images allow adb root.
+adb root > /dev/null; adb wait-for-device
+adb shell setprop persist.sys.locale ru-RU
+adb shell setprop ctl.restart zygote
+sleep 10
+adb wait-for-device
+for _ in $(seq 60); do
+  adb shell pm path android 2> /dev/null | grep -q package && adb shell dumpsys window | grep -q mCurrentFocus && break
+  sleep 2
+done
+sleep 10
+echo "System locale: $(adb shell getprop persist.sys.locale)"
 adb shell getprop ro.product.cpu.abilist
 adb shell getconf PAGE_SIZE
 
@@ -315,6 +330,47 @@ fi
 adb logcat -d -b crash | tail -40
 adb logcat -d | grep -iE "ExoPlayerImpl|PlaybackException|TorrentDataSource" | tail -20
 echo "Played a track."
+
+# The same path in English, the default language, through the per-app language of Android 13+: it must find the
+# album and play it with English texts. The album is cached by now, so this takes seconds.
+if [ "$sdk" -ge 33 ]; then
+  echo "::group::Find an album and play it in English"
+  adb shell am force-stop "$package"
+  adb shell cmd locale set-app-locales "$package" --locales en-US
+  adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
+  for _ in $(seq 20); do
+    python3 "$here/tap.py" "=Search" && break
+    sleep 1
+  done || fail "No Search tab in English"
+  python3 "$here/tap.py" "Artist, album" || fail "No search field in English"
+  # shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward
+  adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
+  adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
+  python3 "$here/tap.py" "=Find" || fail "No Find button in English"
+  for i in $(seq 60); do
+    sleep 1
+    [ $((i % 15)) -eq 0 ] && python3 "$here/tap.py" "=Find" > /dev/null
+    python3 "$here/tap.py" "Pink Floyd · 1973" && break
+  done || fail "The catalog shows no Pink Floyd album of 1973 in English"
+  # As in Russian: the album tap opens its track list, and the first track's tap starts the sound.
+  for _ in $(seq 90); do
+    sleep 1
+    python3 "$here/tap.py" "Track 1. " > /dev/null && break
+  done || fail "No track list in English"
+  playing=
+  for _ in $(seq 60); do
+    sleep 1
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Pause"'; then
+      playing=yes
+      break
+    fi
+  done
+  adb exec-out screencap -p > screen-english.png
+  [ -n "$playing" ] || fail "The album does not play in English"
+  adb shell cmd locale set-app-locales "$package" --locales ru-RU
+  echo "::endgroup::"
+fi
 
 # Soulseek, the fallback source: the tracker proxy points nowhere, so both trackers fail and the catalog album
 # must come from Soulseek, the way a user hears an album the trackers do not have. A new account per run and

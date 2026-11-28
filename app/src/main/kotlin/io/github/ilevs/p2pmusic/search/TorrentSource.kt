@@ -1,6 +1,8 @@
 package io.github.ilevs.p2pmusic.search
 
+import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
+import io.github.ilevs.p2pmusic.text
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -80,7 +82,7 @@ class AllSources(
         source: TorrentSource,
         outcome: Result<List<SearchResult>>,
     ): String {
-        val message = outcome.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "ничего не найдено"
+        val message = outcome.exceptionOrNull()?.let { it.message ?: it.toString() } ?: text(R.string.nothing_found)
         return named(source, message)
     }
 
@@ -97,7 +99,7 @@ class AllSources(
         return try {
             source.torrentFile(result)
         } catch (e: IOException) {
-            throw IOException(named(source, ".torrent не скачался: ${e.message ?: e}"), e)
+            throw IOException(named(source, text(R.string.torrent_file_failed, e.message ?: e)), e)
         }
     }
 }

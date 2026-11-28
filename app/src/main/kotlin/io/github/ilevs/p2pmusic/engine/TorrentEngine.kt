@@ -1,5 +1,7 @@
 package io.github.ilevs.p2pmusic.engine
 
+import io.github.ilevs.p2pmusic.R
+import io.github.ilevs.p2pmusic.text
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.SessionManager
@@ -111,7 +113,7 @@ class TorrentEngine(
                     .infoHashes.best
                     .toHex()
             } catch (e: IllegalArgumentException) {
-                throw IOException("Это не magnet-ссылка", e)
+                throw IOException(text(R.string.not_a_magnet), e)
             }
         if (find(hash) == null && !addCached(hash)) {
             session.download(magnet, downloadsDir, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
@@ -127,7 +129,7 @@ class TorrentEngine(
             try {
                 TorrentInfo.bdecode(bytes)
             } catch (e: IllegalArgumentException) {
-                throw IOException("Трекер вернул не .torrent-файл", e)
+                throw IOException(text(R.string.not_a_torrent_file), e)
             }
         val hash = info.infoHash().toHex()
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(bytes)
@@ -136,7 +138,7 @@ class TorrentEngine(
             session.remove(it)
             awaitUntil(REMOVE_TIMEOUT_MS) { find(hash) == null }
         }
-        if (find(hash) == null && !addCached(hash)) throw IOException("Не удалось добавить торрент $hash")
+        if (find(hash) == null && !addCached(hash)) throw IOException(text(R.string.torrent_not_added, hash))
         return awaitMetadata(hash)
     }
 
@@ -145,7 +147,7 @@ class TorrentEngine(
         if (find(hash) == null &&
             !addCached(hash)
         ) {
-            throw IOException("Торрент $hash не найден: откройте его заново через поиск")
+            throw IOException(text(R.string.torrent_not_found, hash))
         }
         return awaitMetadata(hash)
     }
@@ -168,7 +170,7 @@ class TorrentEngine(
         if (!file.exists()) return false
         val error = error_code()
         val params = libtorrent.load_torrent_file(file.absolutePath, error, load_torrent_limits())
-        if (error.value() != 0) throw IOException("Сохранённый торрент $hash повреждён: ${error.message()}")
+        if (error.value() != 0) throw IOException(text(R.string.torrent_damaged, hash, error.message()))
         params.setSave_path(downloadsDir.absolutePath)
         params.setFlags(params.getFlags().or_(TorrentFlags.DEFAULT_DONT_DOWNLOAD))
         session.swig().async_add_torrent(params)
@@ -182,7 +184,7 @@ class TorrentEngine(
         val isReady = awaitUntil(timeoutMs) { find(hash)?.status()?.hasMetadata() == true }
         if (!isReady) {
             val seconds = timeoutMs / MS_PER_SECOND
-            throw IOException("За $seconds с не нашлось ни одного пира: раздача мёртвая или сеть режет торренты")
+            throw IOException(text(R.string.no_peers, seconds))
         }
         return requireNotNull(find(hash))
     }

@@ -13,9 +13,11 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.catalog.coverUrl
+import io.github.ilevs.p2pmusic.text
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -40,7 +42,7 @@ class LibraryCallback(
             .setMediaMetadata(
                 MediaMetadata
                     .Builder()
-                    .setTitle("P2P Music")
+                    .setTitle(text(R.string.app_name))
                     .setIsBrowsable(true)
                     .setIsPlayable(false)
                     .build(),
@@ -119,8 +121,9 @@ class LibraryCallback(
         val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
         scope.launch {
             runCatching { block() }
-                .onSuccess { if (it != null) future.set(it) else future.setException(IOException("Nothing to play")) }
-                .onFailure { future.setException(it) }
+                .onSuccess {
+                    if (it != null) future.set(it) else future.setException(IOException(text(R.string.nothing_to_play)))
+                }.onFailure { future.setException(it) }
         }
         return future
     }

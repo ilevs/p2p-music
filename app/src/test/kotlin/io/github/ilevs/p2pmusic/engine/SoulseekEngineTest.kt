@@ -2,6 +2,7 @@ package io.github.ilevs.p2pmusic.engine
 
 import io.github.ilevs.p2pmusic.engine.SoulseekApi.Companion.FAILED
 import io.github.ilevs.p2pmusic.engine.SoulseekApi.Companion.QUEUED
+import io.github.ilevs.p2pmusic.useEnglishTexts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -9,6 +10,10 @@ import org.junit.Test
 import java.nio.file.Files
 
 class SoulseekEngineTest {
+    init {
+        useEnglishTexts()
+    }
+
     @Test
     fun parsesSearchLinesAndSkipsBrokenOnes() {
         val lines = "anna\t1\t500000\t9000000\tMusic\\Kino\\1988 - Gruppa krovi\\01 Gruppa krovi.mp3\nbroken line\n"
@@ -32,7 +37,7 @@ class SoulseekEngineTest {
     @Test
     fun aRefusedLoginSaysWhyInTheUsersWords() {
         assertEquals(
-            "Soulseek: неверный пароль, или это имя уже занял кто-то другой",
+            "Soulseek: wrong password, or someone else already took this name",
             loginError("Authentication failed: INVALIDPASS"),
         )
         assertEquals("Soulseek: Operation timed out", loginError("Operation timed out"))

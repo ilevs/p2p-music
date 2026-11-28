@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.catalog
 
+import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
@@ -12,6 +13,7 @@ import io.github.ilevs.p2pmusic.playback.torrentAlbum
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.search.open
+import io.github.ilevs.p2pmusic.text
 import io.github.ilevs.p2pmusic.toJson
 import io.github.ilevs.p2pmusic.toSavedAlbum
 import kotlinx.coroutines.CoroutineDispatcher
@@ -116,7 +118,7 @@ class CatalogController(
         val opened =
             picks.take(MAX_RELEASES_TRIED).firstNotNullOfOrNull { pick -> lookInto(album, pick) }
         val answers = wide.exceptionOrNull()?.let { " ${it.message}" }.orEmpty()
-        return opened ?: throw IOException("Альбом «${album.title}» не найден на трекерах (${source.name}).$answers")
+        return opened ?: throw IOException(text(R.string.album_not_on_trackers, album.title, source.name) + answers)
     }
 
     // The handle of [pick] if it holds the album, else null: a release that fails to open is one more miss.
@@ -157,13 +159,13 @@ class CatalogController(
                 album,
                 soulseek.search("${album.artist} ${album.title}") { enoughToRace(album, it, RACE_SIZE) },
             )
-        if (folders.isEmpty()) throw IOException("$why; в Soulseek «${album.title}» тоже нет")
+        if (folders.isEmpty()) throw IOException(text(R.string.album_not_on_soulseek, why, album.title))
         val tracks =
             folders
                 .take(RACE_SIZE * RACE_ROUNDS)
                 .chunked(RACE_SIZE)
                 .firstNotNullOfOrNull { round -> soulseek.raceFolders(round, RACE_MS) }
-                ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
+                ?: throw IOException(text(R.string.album_soulseek_busy, why, album.title))
         tracks.drop(1).forEach { runCatching { soulseek.download(it) } }
         return OpenedAlbum(null, album.title, tracks.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
     }
@@ -171,9 +173,7 @@ class CatalogController(
     private fun connectSoulseek(why: String): SoulseekEngine {
         val user = settings.load()
         if (user.soulseekLogin.isBlank()) {
-            throw IOException(
-                "$why. Впишите логин Soulseek в настройках, чтобы искать и там",
-            )
+            throw IOException(text(R.string.album_soulseek_no_login, why))
         }
         return stream.soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
     }
@@ -187,7 +187,7 @@ class CatalogController(
                     saved.toJson().put("torrent", torrent?.readBytes()?.let(Base64.getEncoder()::encodeToString))
                 }
             output.use { it.write(JSONObject().put("albums", JSONArray(albums)).toString().toByteArray()) }
-            "Сохранено альбомов: ${albums.size}"
+            text(R.string.albums_saved, albums.size)
         }
     }
 
@@ -209,7 +209,7 @@ class CatalogController(
                 settings.addToLibrary(item.toSavedAlbum().let { if (hash != null) it.copy(hash = hash) else it })
             }
             mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
-            "Добавлено альбомов: ${albums.length()}"
+            text(R.string.albums_added, albums.length())
         }
     }
 
