@@ -12,3 +12,4 @@ build/
 *.keystore
 !debug.keystore
 /native/soulseek/target/
+*.whl
