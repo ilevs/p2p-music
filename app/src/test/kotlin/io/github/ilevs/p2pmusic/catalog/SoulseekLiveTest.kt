@@ -48,6 +48,23 @@ class SoulseekLiveTest {
         engine.cancel(first)
     }
 
+    // An artist the trackers do not have (ilia's search, 2026-11-28): what the release search shows from Soulseek.
+    @Test(timeout = TIMEOUT_MS)
+    fun findsAnArtistTheTrackersLack() {
+        val login = System.getenv("SOULSEEK_LOGIN").orEmpty()
+        assumeTrue(
+            "LIVE_TESTS or the Soulseek account is not set",
+            System.getenv("LIVE_TESTS") == "true" && login.isNotEmpty(),
+        )
+        val engine = SoulseekEngine(temp.newFolder("soulseek"))
+        engine.connect(login, System.getenv("SOULSEEK_PASSWORD").orEmpty(), share = false)
+        val start = System.currentTimeMillis()
+        val folders = audioFolders(engine.search(QUERY) { audioFolders(it).size >= FOLDERS })
+        println("METRIC soulseek_query_search_ms=${System.currentTimeMillis() - start}")
+        println("METRIC soulseek_query_folders=${folders.size}")
+        folders.take(FOLDERS).forEach { println("Soulseek: ${it[0].user} ${it[0].folder} (${it.size} tracks)") }
+    }
+
     // The client's threads must stop before the JVM exits, or the test process dies with SIGSEGV.
     @After
     fun disconnect() = SoulseekEngine(temp.root).disconnect()
@@ -58,5 +75,7 @@ class SoulseekLiveTest {
         const val RACE_MS = 60_000L
         const val BYTES = 256 * 1024L
         const val KB = 1024
+        const val QUERY = "Джон Гарик"
+        const val FOLDERS = 10
     }
 }
