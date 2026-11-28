@@ -20,6 +20,8 @@ HOPS = 4
 HOP_PAUSE_S = 2
 SOUND_WAIT_S = 90
 LIST_WAIT_S = 30
+# Texts of the search screen itself, which can stand right before a row's "artist" line.
+UI_TEXTS = ["Артист, альбом", "Найти", "Альбомы", "Раздачи", "Мои альбомы"]
 
 
 def adb(*args):
@@ -53,13 +55,15 @@ def album_titles(artist):
     texts = [t for t in (n.get("text", "") for n in nodes()) if t]
     titles = []
     for before, details in zip(texts, texts[1:]):
-        if (details == artist or details.startswith(artist + " · ")) and before and before not in titles:
+        if (details == artist or details.startswith(artist + " · ")) and before not in UI_TEXTS + titles:
             titles.append(before)
     return titles
 
 
 def search(artist):
     tap("Поиск", exact=True)
+    # The catalog's albums, not the trackers' releases.
+    tap("Альбомы", exact=True)
     tap("Артист, альбом")
     adb("shell", "input", "keyevent", "123", *["67"] * 60)
     adb("shell", "input", "text", artist.replace(" ", "%s"))
