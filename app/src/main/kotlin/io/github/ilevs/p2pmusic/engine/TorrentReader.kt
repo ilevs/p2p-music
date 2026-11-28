@@ -151,5 +151,10 @@ private fun selectOnly(
     // libtorrent applies file priorities to the pieces in a callback, which would undo the lines below.
     engine.awaitUntil(PRIORITY_TIMEOUT_MS) { touched.none { handle.filePriority(it) == Priority.IGNORE } }
     val wanted = selected.flatMapTo(window.toMutableSet()) { pieces.getValue(it) }
-    touched.flatMap { pieces.getValue(it) }.minus(wanted).forEach { handle.piecePriority(it, Priority.IGNORE) }
+    // Still LOW: a track tapped meanwhile has raised its files, and those download whole.
+    touched
+        .filter { handle.filePriority(it) == Priority.LOW }
+        .flatMap { pieces.getValue(it) }
+        .minus(wanted)
+        .forEach { handle.piecePriority(it, Priority.IGNORE) }
 }
