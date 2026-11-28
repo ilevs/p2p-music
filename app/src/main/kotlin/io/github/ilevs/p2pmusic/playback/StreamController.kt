@@ -302,7 +302,7 @@ internal fun restartIfErrored(
 ) {
     val error = status.errorCode().takeIf { it.isError } ?: return
     log.warning { "torrent error «${error.message}», restarting it" }
-    handle.swig().clear_error()
+    handle.clearError()
 }
 
 // Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds.
