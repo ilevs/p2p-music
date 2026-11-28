@@ -16,6 +16,7 @@ import io.github.ilevs.p2pmusic.playback.SoulseekDataSource
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.TorrentDataSource
 import io.github.ilevs.p2pmusic.search.AllSources
+import io.github.ilevs.p2pmusic.search.Knaben
 import io.github.ilevs.p2pmusic.search.MemoryCookieJar
 import io.github.ilevs.p2pmusic.search.ProxySettings
 import io.github.ilevs.p2pmusic.search.RuTracker
@@ -84,7 +85,11 @@ class AppGraph(
 
     private val tracker = RuTracker(client = ::trackerClient, credentials = { settings.load().credentials() })
 
-    private val sources = AllSources(listOf(tracker, Rutor(client = ::trackerClient)))
+    private val sources =
+        AllSources(
+            listOf(tracker, Rutor(client = ::trackerClient)),
+            fallback = listOf(Knaben(client = ::trackerClient)),
+        )
 
     val search = SearchController(sources, tracker, soulseek, settings, scope, io)
 
