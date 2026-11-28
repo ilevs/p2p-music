@@ -19,7 +19,7 @@ ALBUMS_PER_ARTIST = int(os.environ.get("SCENARIO_ALBUMS", "3"))
 HOPS = 4
 HOP_PAUSE_S = 2
 SOUND_WAIT_S = 90
-LIST_WAIT_S = 60
+LIST_WAIT_S = 30
 
 
 def adb(*args):
@@ -50,7 +50,7 @@ def tap(text, exact=False):
 
 def album_titles(artist):
     """Titles of the album rows by [artist], top to bottom: each row is a title, then "artist · year"."""
-    texts = [n.get("text", "") for n in nodes()]
+    texts = [t for t in (n.get("text", "") for n in nodes()) if t]
     titles = []
     for before, details in zip(texts, texts[1:]):
         if (details == artist or details.startswith(artist + " · ")) and before and before not in titles:
@@ -72,6 +72,9 @@ def search(artist):
         titles = album_titles(artist)
         if titles:
             return titles
+    print(f"No album rows by {artist}; texts on screen: {[n.get('text') for n in nodes() if n.get('text')][:40]}")
+    adb("shell", "screencap", "-p", "/sdcard/scenario.png")
+    subprocess.run(["adb", "pull", "/sdcard/scenario.png", f"screen-scenario-{artist.replace(' ', '-')}.png"], check=False)
     return []
 
 
