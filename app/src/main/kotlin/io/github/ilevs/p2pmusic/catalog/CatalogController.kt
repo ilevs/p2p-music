@@ -6,6 +6,7 @@ import io.github.ilevs.p2pmusic.UserSettings
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.engine.toUri
+import io.github.ilevs.p2pmusic.parseAlbums
 import io.github.ilevs.p2pmusic.playback.AudioFile
 import io.github.ilevs.p2pmusic.playback.OpenedAlbum
 import io.github.ilevs.p2pmusic.playback.StreamController
@@ -53,6 +54,7 @@ private val log = Logger.getLogger("p2pmusic")
 data class CatalogState(
     val albums: List<Album> = emptyList(),
     val library: List<Album> = emptyList(),
+    val liked: List<Album> = emptyList(),
     val isLoading: Boolean = false,
     val message: String? = null,
     /** The album whose [sources] were found, or null while they are searched for. */
@@ -84,8 +86,15 @@ class CatalogController(
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
 ) {
-    private val mutableState = MutableStateFlow(CatalogState(library = settings.library().map { it.album }))
+    private val mutableState =
+        MutableStateFlow(CatalogState(library = settings.library().map { it.album }, liked = settings.liked()))
     val state: StateFlow<CatalogState> = mutableState.asStateFlow()
+
+    /** Puts [album] in "Мои альбомы", or takes it out when it is there. */
+    fun toggleLike(album: Album) {
+        settings.setLiked(album, state.value.liked.none { it.id == album.id })
+        mutableState.update { it.copy(liked = settings.liked()) }
+    }
 
     /** Asks all catalogs at once and shows their albums together; fails only when every catalog fails. */
     fun search(query: String) {
@@ -124,7 +133,7 @@ class CatalogController(
         albumId: String,
         pick: SearchResult,
     ) {
-        val album = album(albumId) ?: return
+        val album = findAlbum(settings, state.value.albums, albumId) ?: return
         val track = if (stream.state.value.albumId == albumId) stream.playingIndex() else null
         // Kept for the album only once it sent the track, so a dead release does not replace a live one.
         val kept = { opened: OpenedAlbum ->
@@ -146,16 +155,13 @@ class CatalogController(
     /** Searches the trackers for where the album [albumId] can play from, unless that is known already. */
     fun findSources(albumId: String) {
         if (state.value.sourcesOf == albumId) return
-        val album = album(albumId) ?: return
+        val album = findAlbum(settings, state.value.albums, albumId) ?: return
         scope.launch {
             val found = withContext(io) { runCatching { source.search("${album.artist} ${album.title}") } }
             mutableState.showSources(album, found.getOrDefault(emptyList()))
         }
     }
 
-    // An album played before is in the library; one that only Soulseek had is still in the search results.
-    private fun album(id: String): Album? =
-        settings.library().firstOrNull { it.album.id == id }?.album ?: state.value.albums.firstOrNull { it.id == id }
 
     // The saved release, else a new one; saved only once the torrent proved to hold the album.
     private fun openTorrent(album: Album): OpenedAlbum {
@@ -192,7 +198,7 @@ class CatalogController(
         return opened ?: throw IOException("Альбом «${album.title}» не найден на трекерах (${source.name}).$answers")
     }
 
-    /** Writes the library with each album's .torrent, so another device plays it without the tracker. */
+    /** Writes the history with each album's .torrent, and the liked albums, so another device plays them offline. */
     fun exportLibrary(output: OutputStream) {
         run {
             val albums =
@@ -200,7 +206,9 @@ class CatalogController(
                     val torrent = File(stream.engine.torrentsDir, "${saved.hash}.torrent").takeIf { it.exists() }
                     saved.toJson().put("torrent", torrent?.readBytes()?.let(Base64.getEncoder()::encodeToString))
                 }
-            output.use { it.write(JSONObject().put("albums", JSONArray(albums)).toString().toByteArray()) }
+            val liked = JSONArray(settings.liked().map { it.toJson() })
+            val file = JSONObject().put("albums", JSONArray(albums)).put("liked", liked)
+            output.use { it.write(file.toString().toByteArray()) }
             "Сохранено альбомов: ${albums.size}"
         }
     }
@@ -208,7 +216,11 @@ class CatalogController(
     /** Adds albums from an export file; their .torrent files are checked and cached. */
     fun importLibrary(input: InputStream) {
         run {
-            val albums = JSONObject(input.use { String(it.readBytes()) }).getJSONArray("albums")
+            val file = JSONObject(input.use { String(it.readBytes()) })
+            // Files from before likes have no "liked".
+            val liked = parseAlbums(file.optJSONArray("liked")?.toString() ?: "[]")
+            liked.reversed().forEach { settings.setLiked(it, true) }
+            val albums = file.getJSONArray("albums")
             // Oldest first, so the file's order survives addToLibrary putting each one on top.
             for (i in albums.length() - 1 downTo 0) {
                 val item = albums.getJSONObject(i)
@@ -222,7 +234,8 @@ class CatalogController(
                     }
                 settings.addToLibrary(item.toSavedAlbum().let { if (hash != null) it.copy(hash = hash) else it })
             }
-            mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
+            val library = settings.library().map { it.album }
+            mutableState.update { it.copy(library = library, liked = settings.liked()) }
             "Добавлено альбомов: ${albums.length()}"
         }
     }
@@ -237,6 +250,13 @@ class CatalogController(
         }
     }
 }
+
+// An album played before is in the history; one that only Soulseek had is still in the search results.
+internal fun findAlbum(
+    settings: SettingsStore,
+    found: List<Album>,
+    id: String,
+): Album? = settings.library().firstOrNull { it.album.id == id }?.album ?: found.firstOrNull { it.id == id }
 
 // The tracker releases found for [album], the expected fastest first, then Soulseek, which takes the longest.
 // Not private: called from lambdas, and lint forbids synthetic accessors; not in the class: detekt caps its functions.

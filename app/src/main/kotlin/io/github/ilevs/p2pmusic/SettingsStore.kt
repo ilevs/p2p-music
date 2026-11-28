@@ -52,27 +52,38 @@ data class LastPlayed(
     val positionMs: Long,
 )
 
-/** One saved album as JSON: the form kept in settings and written to the export file. */
-internal fun SavedAlbum.toJson(): JSONObject =
+internal fun Album.toJson(): JSONObject =
     JSONObject()
-        .put("id", album.id)
-        .put("title", album.title)
-        .put("artist", album.artist)
-        .put("year", album.year)
-        .put("cover", album.cover)
-        .put("hash", hash)
+        .put("id", id)
+        .put("title", title)
+        .put("artist", artist)
+        .put("year", year)
+        .put("cover", cover)
 
-internal fun JSONObject.toSavedAlbum(): SavedAlbum =
-    SavedAlbum(
-        // Older versions saved no "cover".
-        Album(getString("id"), getString("title"), getString("artist"), getString("year"), optString("cover")),
-        getString("hash"),
-    )
+// Older versions saved no "cover".
+internal fun JSONObject.toAlbum(): Album =
+    Album(getString("id"), getString("title"), getString("artist"), getString("year"), optString("cover"))
+
+/** One saved album as JSON: the form kept in settings and written to the export file. */
+internal fun SavedAlbum.toJson(): JSONObject = album.toJson().put("hash", hash)
+
+internal fun JSONObject.toSavedAlbum(): SavedAlbum = SavedAlbum(toAlbum(), getString("hash"))
 
 internal fun parseLibrary(json: String): List<SavedAlbum> {
     val array = JSONArray(json)
     return (0 until array.length()).map { array.getJSONObject(it).toSavedAlbum() }
 }
+
+internal fun parseAlbums(json: String): List<Album> {
+    val array = JSONArray(json)
+    return (0 until array.length()).map { array.getJSONObject(it).toAlbum() }
+}
+
+/** The newest [LIBRARY_SIZE] played albums, and every liked one older than that: it keeps its release. */
+internal fun trimHistory(
+    history: List<SavedAlbum>,
+    liked: Set<String>,
+): List<SavedAlbum> = history.filterIndexed { i, saved -> i < LIBRARY_SIZE || saved.album.id in liked }
 
 class SettingsStore(
     context: Context,
@@ -119,12 +130,25 @@ class SettingsStore(
         }
     }
 
-    /** Played albums, newest first. */
+    /** The listening history: played albums with their releases, newest first. */
     fun library(): List<SavedAlbum> = parseLibrary(prefs.getString(LIBRARY, "[]").orEmpty())
 
     fun addToLibrary(saved: SavedAlbum) {
-        val library = (listOf(saved) + library().filterNot { it.album.id == saved.album.id }).take(LIBRARY_SIZE)
+        val history = listOf(saved) + library().filterNot { it.album.id == saved.album.id }
+        val library = trimHistory(history, liked().map { it.id }.toSet())
         prefs.edit { putString(LIBRARY, JSONArray(library.map { it.toJson() }).toString()) }
+    }
+
+    /** "Мои альбомы": the albums the user liked, newest first. */
+    fun liked(): List<Album> = parseAlbums(prefs.getString(LIKED, "[]").orEmpty())
+
+    fun setLiked(
+        album: Album,
+        liked: Boolean,
+    ) {
+        val others = liked().filterNot { it.id == album.id }
+        val albums = if (liked) listOf(album) + others else others
+        prefs.edit { putString(LIKED, JSONArray(albums.map { it.toJson() }).toString()) }
     }
 
     private companion object {
@@ -138,6 +162,7 @@ class SettingsStore(
         const val LAST_FILE = "last_file"
         const val LAST_POSITION = "last_position"
         const val LIBRARY = "library"
+        const val LIKED = "liked"
         const val SEEDING = "seeding"
         const val SOULSEEK_LOGIN = "soulseek_login"
         const val SOULSEEK_PASSWORD = "soulseek_password"

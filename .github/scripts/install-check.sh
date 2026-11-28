@@ -389,6 +389,40 @@ if await_tracks 60; then
 fi
 [ -n "$playing" ] || fail "The album played before does not play again after another one"
 metric album_return_to_sound_s "$returned"
+# Like: the heart on the album's row puts it in "Мои альбомы", which an empty field shows, also after a restart,
+# and from where it plays again; a second tap moves it back to the listening history.
+liked='Убрать из моих альбомов: Pink Floyd — Wish You Were Here'
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "В мои альбомы: Pink Floyd — Wish You Were Here" || fail "No like button on the album row"
+# Settings are written to disk a moment after the tap; force-stop at once would lose them, as no user does.
+sleep 3
+adb shell am force-stop "$package"
+adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
+for _ in $(seq 20); do
+  python3 "$here/tap.py" "Поиск" > /dev/null && break
+  sleep 1
+done
+adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+adb shell cat /sdcard/ui.xml | grep -q 'text="Мои альбомы"' && adb shell cat /sdcard/ui.xml | grep -q "content-desc=\"$liked" || {
+  adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -30
+  fail "The liked album is not in Мои альбомы after a restart"
+}
+adb exec-out screencap -p > screen-liked.png
+python3 "$here/tap.py" "=Wish You Were Here" || fail "No liked album row"
+tapped=$(date +%s)
+playing=
+if await_tracks 60; then
+  metric liked_album_tap_to_tracks_s "$tapped"
+  play_first_track 60 && playing=yes
+fi
+[ -n "$playing" ] || fail "The liked album does not play after a restart"
+metric liked_album_tap_to_sound_s "$tapped"
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "$liked" || fail "No unlike button on the liked album"
+sleep 1
+adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+adb shell cat /sdcard/ui.xml | grep -q 'text="Мои альбомы"' && fail "Мои альбомы still shows after the only like was taken back"
+adb shell cat /sdcard/ui.xml | grep -q 'text="История прослушивания"' || fail "No listening history"
 # Which releases the three albums opened and how long each search and each try took.
 adb logcat -d -s p2pmusic:I | grep -E "search|open" | tail -30
 echo "::endgroup::"
