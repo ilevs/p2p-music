@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,7 +90,7 @@ private fun TrackList(
                     onValueChange = { magnet = it },
                     label = { Text(stringResource(R.string.magnet_label)) },
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).leaveOnUpDown(LocalFocusManager.current),
                 )
                 Button(
                     onClick = { controller.open(magnet.trim()) },

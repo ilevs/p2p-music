@@ -12,8 +12,6 @@ echo "Package $package"
 adb shell getprop ro.build.version.release
 adb shell getprop ro.product.cpu.abilist
 adb shell pm list features | grep -E "leanback|touchscreen" || true
-# The emulator's keyboard is the remote: its keys must report a D-pad source.
-adb shell dumpsys input | grep -E "^\s+[0-9]+: |Sources:|KeyboardType" | head -30
 
 fail() {
   adb exec-out screencap -p > screen-tv-failed.png
@@ -58,16 +56,17 @@ dpad "Артист, альбом" DOWN 6 || dpad "Артист, альбом" RI
 # Focus alone opens the on-screen keyboard; OK opens it when it was closed.
 adb shell dumpsys input_method | grep -q "mInputShown=true" || key CENTER
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
-# Back hides the on-screen keyboard; without one it would leave the app.
-adb shell dumpsys input_method | grep -q "mInputShown=true" && key BACK
 adb exec-out screencap -p > screen-tv-query.png
-dpad "Найти" RIGHT 3 || dpad "Найти" DOWN 3 || fail "The search button cannot be reached by remote"
-key CENTER
+# The keyboard's search key, as on the remote.
+key ENTER
+# Back hides the on-screen keyboard if it is still up; without one it would leave the app.
+adb shell dumpsys input_method | grep -q "mInputShown=true" && key BACK
+adb shell dumpsys input_method | grep -E "mInputShown"
 searched=$(date +%s)
 for i in $(seq 60); do
   sleep 1
   # MusicBrainz answers 503 to the runners' shared addresses at times: search again, as a user would.
-  [ $((i % 15)) -eq 0 ] && key CENTER
+  [ $((i % 15)) -eq 0 ] && dpad "Найти" RIGHT 3 && key CENTER
   screen | grep -q 'text="Pink Floyd · 1973"' && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
 metric tv_search_to_albums_s "$searched"

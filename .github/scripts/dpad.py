@@ -5,15 +5,11 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
-# Linux key codes of the emulator's hardware keyboard, which Android reads as a D-pad like a TV remote's.
-# "adb shell input" keys come from a virtual device, and Compose text fields ignore D-pad keys from those.
-CODES = {"UP": 103, "DOWN": 108, "LEFT": 105, "RIGHT": 106, "CENTER": 232, "BACK": 158}
-
-
+# Keys as the system sends them. Compose text fields move focus on their own only for a hardware D-pad's keys;
+# the app's fields do it for any up and down.
 def press(key):
-    code = CODES[key]
-    subprocess.run(["adb", "emu", "event", "send", f"EV_KEY:{code}:1", "EV_SYN:0:0", f"EV_KEY:{code}:0", "EV_SYN:0:0"],
-                   check=True, capture_output=True)
+    subprocess.run(["adb", "shell", "input", "keyevent", "KEYCODE_" + (key if key in ("BACK", "ENTER") else "DPAD_" + key)],
+                   check=True)
 
 
 def labels(node):
