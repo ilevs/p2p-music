@@ -9,7 +9,7 @@ import org.json.JSONObject
 import java.io.IOException
 
 // MusicBrainz asks every client to name itself and a contact.
-private const val USER_AGENT = "P2PMusic/0.1 ( https://github.com/ilevs/p2p-music )"
+private const val USER_AGENT = "Peerlude/0.1 ( https://github.com/ilevs/p2p-music )"
 internal const val PAGE_SIZE = "25"
 internal const val YEAR_LENGTH = 4
 private const val ATTEMPTS = 5

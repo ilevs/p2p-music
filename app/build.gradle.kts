@@ -47,7 +47,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.ilevs.p2pmusic"
+        // The code package keeps the old name; only the installed id follows the app name.
+        applicationId = "io.github.ilevs.peerlude"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersionCode

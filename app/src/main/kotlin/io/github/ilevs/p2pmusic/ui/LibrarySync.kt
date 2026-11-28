@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import io.github.ilevs.p2pmusic.R
 import io.github.ilevs.p2pmusic.catalog.CatalogController
 
-private const val EXPORT_NAME = "p2p-music-library.json"
+private const val EXPORT_NAME = "peerlude-library.json"
 
 /** Moves "Мои альбомы" between devices through a file, e.g. phone to head unit over a USB stick. */
 @Composable

@@ -40,7 +40,7 @@ class LibraryCallback(
             .setMediaMetadata(
                 MediaMetadata
                     .Builder()
-                    .setTitle("P2P Music")
+                    .setTitle("Peerlude")
                     .setIsBrowsable(true)
                     .setIsPlayable(false)
                     .build(),

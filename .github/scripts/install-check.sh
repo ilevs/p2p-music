@@ -3,7 +3,9 @@
 set -u
 apk="$1"
 published="${2:-}"
-package=io.github.ilevs.p2pmusic
+package=io.github.ilevs.peerlude
+# The code package kept its old name after the rename, so the activity is not under $package.
+activity="$package/io.github.ilevs.p2pmusic.MainActivity"
 
 adb shell getprop ro.build.version.release
 adb shell getprop ro.product.cpu.abilist
@@ -16,7 +18,9 @@ if [ -n "$published" ] && [ -f "$published" ]; then
     adb logcat -d | grep -iE "PackageManager|PackageInstaller|NativeLibrary|NativeHelper" | tail -40
     echo "::warning::The published APK does not install on API $(adb shell getprop ro.build.version.sdk)"
   fi
+  # The published APK may still carry the id from before the rename.
   adb uninstall "$package" > /dev/null 2>&1 || true
+  adb uninstall io.github.ilevs.p2pmusic > /dev/null 2>&1 || true
   echo "::endgroup::"
 fi
 
@@ -66,7 +70,7 @@ fail() {
 play_track() {
   adb shell am force-stop "$package"
   adb logcat -c
-  adb shell am start -a android.intent.action.VIEW -d "$1" "$package/.MainActivity"
+  adb shell am start -a android.intent.action.VIEW -d "$1" "$activity"
   sleep 10
   python3 "$here/tap.py" "Плеер" || fail "No player tab"
   for _ in $(seq 10); do
@@ -121,7 +125,7 @@ echo "Torrent $name $live_hash"
 adb shell am force-stop "$package"
 adb logcat -c
 adb shell am start -a android.intent.action.VIEW \
-  -d "magnet:?xt=urn:btih:$live_hash\&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce" "$package/.MainActivity"
+  -d "magnet:?xt=urn:btih:$live_hash\&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce" "$activity"
 sleep 10
 python3 "$here/tap.py" "Плеер" || fail "No player tab"
 for _ in $(seq 30); do

@@ -62,11 +62,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           out=app/build/outputs/apk/release
-          cp "$out/app-universal-release.apk" "p2p-music-${VERSION_NAME}.apk"
+          cp "$out/app-universal-release.apk" "peerlude-${VERSION_NAME}.apk"
           for abi in arm64-v8a armeabi-v7a x86 x86_64; do
-            cp "$out/app-${abi}-release.apk" "p2p-music-${VERSION_NAME}-${abi}.apk"
+            cp "$out/app-${abi}-release.apk" "peerlude-${VERSION_NAME}-${abi}.apk"
           done
-          gh release create "v${VERSION_NAME}" p2p-music-*.apk \
+          gh release create "v${VERSION_NAME}" peerlude-*.apk \
             --target "$GITHUB_SHA" \
             --title "v${VERSION_NAME}" \
             --generate-notes
