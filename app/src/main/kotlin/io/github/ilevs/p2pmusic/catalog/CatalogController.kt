@@ -242,13 +242,14 @@ class CatalogController(
 }
 
 // The tracker releases found for [album], the expected fastest first, then Soulseek, which takes the longest.
-private fun MutableStateFlow<CatalogState>.showSources(
+// Not private: called from lambdas, and lint forbids synthetic accessors; not in the class: detekt caps its functions.
+internal fun MutableStateFlow<CatalogState>.showSources(
     album: Album,
     found: List<SearchResult>,
 ) = update { it.copy(sourcesOf = album.id, sources = rankTorrents(album, found) + SoulseekSource) }
 
 // The handle of [pick] if it holds the album, else why not: a release that fails to open is one more miss.
-private fun lookInto(
+internal fun lookInto(
     source: TorrentSource,
     engine: TorrentEngine,
     album: Album,
@@ -273,14 +274,13 @@ private fun lookInto(
  * sends the rest of the album right after it, so the next track is on disk before it is needed.
  * [why] says what the trackers said, or why Soulseek was picked.
  */
-private fun soulseekAlbum(
+internal fun soulseekAlbum(
     soulseek: SoulseekEngine,
     user: UserSettings,
     album: Album,
     why: String,
 ): OpenedAlbum {
-    if (user.soulseekLogin.isBlank()) throw IOException("$why. Впишите логин Soulseek в настройках, чтобы искать и там")
-    soulseek.connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding)
+    connectSoulseek(soulseek, user, why)
     val folders =
         soulseekFolders(
             album,
@@ -295,4 +295,13 @@ private fun soulseekAlbum(
             ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
     tracks.drop(1).forEach { runCatching { soulseek.download(it) } }
     return OpenedAlbum(null, album.title, tracks.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
+}
+
+private fun connectSoulseek(
+    soulseek: SoulseekEngine,
+    user: UserSettings,
+    why: String,
+) {
+    if (user.soulseekLogin.isBlank()) throw IOException("$why. Впишите логин Soulseek в настройках, чтобы искать и там")
+    soulseek.connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding)
 }
