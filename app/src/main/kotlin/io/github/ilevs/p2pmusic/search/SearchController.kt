@@ -11,6 +11,7 @@ import io.github.ilevs.p2pmusic.playback.OpenedAlbum
 import io.github.ilevs.p2pmusic.playback.torrentAlbum
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,9 @@ private const val MAX_FOLDERS = 30
 private const val ALBUM_TRACKS = 3
 private const val RACE_MS = 60_000L
 
+// The releases a user is likely to tap: the top of the list, by seeds.
+private const val RELEASES_PREFETCHED = 6
+
 data class SearchState(
     val results: List<SearchResult> = emptyList(),
     val isLoading: Boolean = false,
@@ -42,9 +46,10 @@ class SearchController(
     private val source: TorrentSource,
     private val tracker: RuTracker,
     private val soulseek: SoulseekEngine,
+    private val engine: TorrentEngine,
     private val settings: SettingsStore,
     private val scope: CoroutineScope,
-    private val io: CoroutineDispatcher,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val mutableState = MutableStateFlow(SearchState())
     val state: StateFlow<SearchState> = mutableState.asStateFlow()
@@ -63,16 +68,17 @@ class SearchController(
                 // Soulseek first: a long tracker error is cut off on a small screen.
                 results to "$SOULSEEK: $answer. $trackers"
             } else {
+                // Each on its own, so a slow tracker page or a silent magnet holds up no other.
+                found.take(RELEASES_PREFETCHED).forEach { result ->
+                    scope.launch(io) { runCatching { source.prefetch(result, engine) } }
+                }
                 found to null
             }
         }
     }
 
     /** The release or Soulseek folder of [result], ready to play; a folder's tracks start downloading. Blocking. */
-    fun open(
-        result: SearchResult,
-        engine: TorrentEngine,
-    ): OpenedAlbum {
+    fun open(result: SearchResult): OpenedAlbum {
         if (result.id !in folders) return torrentAlbum(source.open(result, engine), null)
         // One user often keeps us queued for minutes; the same release under the same folder name sits with others.
         val twins = folders.values.filter { folderResult(it).title.equals(result.title, ignoreCase = true) }

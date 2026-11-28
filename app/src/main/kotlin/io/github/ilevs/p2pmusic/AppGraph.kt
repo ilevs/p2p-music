@@ -96,7 +96,7 @@ class AppGraph(
             fallback = listOf(Knaben(client = ::trackerClient), NnmClub(client = ::trackerClient)),
         )
 
-    val search = SearchController(sources, tracker, soulseek, settings, scope, io)
+    val search = SearchController(sources, tracker, soulseek, engine, settings, scope, io)
 
     // The catalog is not blocked anywhere, so it goes direct, without the tracker proxy.
     val catalog = CatalogController(MusicBrainz(OkHttpClient()), sources, stream, settings, scope, io)

@@ -31,6 +31,9 @@ private const val MIN_UPLOAD_BYTES_PER_SECOND = 1024
 private const val MIN_RECONNECT_SECONDS = 5
 private const val REMOVE_TIMEOUT_MS = 5_000L
 
+// Two searches' worth: the albums of the search before stay warm when the user goes back to them.
+private const val MAX_PREFETCHED = 12
+
 /**
  * One libtorrent session for the whole app. Blocking calls: use them off the main thread.
  * Exception messages are shown to the user as they are, so they are in Russian.
@@ -85,6 +88,9 @@ class TorrentEngine(
         }
     private val session: SessionManager by sessionLazy
 
+    // Torrents added by [prefetch] and not opened since, oldest first. Guarded by itself.
+    private val prefetched = LinkedHashSet<String>()
+
     /**
      * Off caps uploads at 1 KB/s: libtorrent has no real zero, 0 means unlimited.
      * Starts the session if it is not running, which the app does at launch so the first magnet finds the DHT ready.
@@ -104,21 +110,46 @@ class TorrentEngine(
         magnet: String,
         timeoutMs: Long = METADATA_TIMEOUT_MS,
     ): TorrentHandle {
-        val hash =
-            try {
-                AddTorrentParams
-                    .parseMagnetUri(magnet)
-                    .infoHashes.best
-                    .toHex()
-            } catch (e: IllegalArgumentException) {
-                throw IOException("Это не magnet-ссылка", e)
-            }
+        val hash = parseMagnet(magnet).infoHashes.best.toHex()
+        // An opened torrent stays in the session: [prefetch] no longer removes it.
+        synchronized(prefetched) { prefetched.remove(hash) }
         if (find(hash) == null && !addCached(hash)) {
             session.download(magnet, downloadsDir, TorrentFlags.DEFAULT_DONT_DOWNLOAD)
         }
         val handle = awaitMetadata(hash, timeoutMs)
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(torrentFileBytes(handle))
         return handle
+    }
+
+    /**
+     * Starts fetching the metadata of [magnet] before the user taps it, so that [openMagnet] finds it there.
+     * Downloads no file. Not queued by libtorrent, which runs only a few auto-managed torrents at once and could
+     * pause the playing one. Over [MAX_PREFETCHED], the oldest never opened one is removed, with its peers.
+     */
+    fun prefetch(magnet: String) {
+        val params = parseMagnet(magnet)
+        val hash = params.infoHashes.best.toHex()
+        synchronized(prefetched) {
+            if (prefetched.remove(hash)) {
+                prefetched += hash
+                return
+            }
+            // Opened, playing or being opened: not this method's to remove.
+            if (find(hash) != null) return
+            prefetched += hash
+            if (prefetched.size > MAX_PREFETCHED) {
+                val oldest = prefetched.first()
+                prefetched -= oldest
+                find(oldest)?.let { session.remove(it) }
+            }
+        }
+        params.savePath = downloadsDir.absolutePath
+        params.flags =
+            params.flags
+                .and_(TorrentFlags.AUTO_MANAGED.inv())
+                .and_(TorrentFlags.PAUSED.inv())
+                .or_(TorrentFlags.DEFAULT_DONT_DOWNLOAD)
+        session.swig().async_add_torrent(params.swig())
     }
 
     /** Adds a .torrent file (or finds it in the session) and caches it. */
@@ -130,6 +161,7 @@ class TorrentEngine(
                 throw IOException("Трекер вернул не .torrent-файл", e)
             }
         val hash = info.infoHash().toHex()
+        synchronized(prefetched) { prefetched.remove(hash) }
         File(torrentsDir, "$hash.torrent").takeUnless { it.exists() }?.writeBytes(bytes)
         // A magnet of this torrent that found no peers yet would keep waiting; the file has the metadata.
         find(hash)?.takeUnless { it.status().hasMetadata() }?.let {
@@ -142,6 +174,7 @@ class TorrentEngine(
 
     /** A torrent that was opened before, from the session or from the .torrent cache. */
     fun handle(hash: String): TorrentHandle {
+        synchronized(prefetched) { prefetched.remove(hash) }
         if (find(hash) == null &&
             !addCached(hash)
         ) {
@@ -153,14 +186,6 @@ class TorrentEngine(
     val dhtNodes: Long get() = if (sessionLazy.isInitialized()) session.dhtNodes() else 0
 
     fun find(hash: String): TorrentHandle? = session.find(Sha1Hash.parseHex(hash))?.takeIf { it.isValid }
-
-    /** Blocks until [piece] is downloaded and verified. Interrupting the thread cancels the wait. */
-    fun awaitPiece(
-        handle: TorrentHandle,
-        piece: Int,
-    ) {
-        awaitUntil(Long.MAX_VALUE) { handle.havePiece(piece) }
-    }
 
     // Loads the whole .torrent, not just its info dictionary, so the torrent keeps its trackers.
     private fun addCached(hash: String): Boolean {
@@ -187,7 +212,11 @@ class TorrentEngine(
         return requireNotNull(find(hash))
     }
 
-    private fun awaitUntil(
+    /**
+     * Blocks until [condition] holds, re-checked on every alert, at most [timeoutMs]; false when it timed out.
+     * Interrupting the thread cancels the wait.
+     */
+    fun awaitUntil(
         timeoutMs: Long,
         condition: () -> Boolean,
     ): Boolean {
@@ -207,6 +236,13 @@ class TorrentEngine(
         return true
     }
 }
+
+private fun parseMagnet(magnet: String): AddTorrentParams =
+    try {
+        AddTorrentParams.parseMagnetUri(magnet)
+    } catch (e: IllegalArgumentException) {
+        throw IOException("Это не magnet-ссылка", e)
+    }
 
 // Not private: called from the class, and lint forbids synthetic accessors.
 internal fun torrentFileBytes(handle: TorrentHandle): ByteArray {

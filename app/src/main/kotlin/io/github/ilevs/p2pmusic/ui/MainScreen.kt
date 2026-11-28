@@ -106,7 +106,7 @@ private fun TabContent(
                     onTabChange(Tab.Player)
                 },
                 onOpen = { result ->
-                    graph.stream.openAlbum(result.source == SOULSEEK, null) { graph.search.open(result, graph.engine) }
+                    graph.stream.openAlbum(result.source == SOULSEEK, null) { graph.search.open(result) }
                     onTabChange(Tab.Player)
                 },
                 modifier = modifier,

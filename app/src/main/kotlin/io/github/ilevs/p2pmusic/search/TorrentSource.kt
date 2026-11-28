@@ -118,3 +118,14 @@ fun TorrentSource.open(
     // Both are one torrent in the session, so this wait also ends when the .torrent brings the metadata.
     return runCatching { engine.openMagnet(magnet, MAGNET_FIRST_MS) }.getOrNull() ?: byFile.get().getOrThrow()
 }
+
+/**
+ * Starts fetching the metadata of [result] ahead of a tap, see [TorrentEngine.prefetch]. Blocking: a tracker may
+ * need a request for the magnet. A release without a magnet is left to its .torrent at the tap.
+ */
+fun TorrentSource.prefetch(
+    result: SearchResult,
+    engine: TorrentEngine,
+) {
+    magnet(result).takeIf { it.isNotEmpty() }?.let(engine::prefetch)
+}

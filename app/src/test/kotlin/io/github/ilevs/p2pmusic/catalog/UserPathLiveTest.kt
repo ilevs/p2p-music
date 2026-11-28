@@ -2,8 +2,12 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.search.AllSources
+import io.github.ilevs.p2pmusic.search.NnmClub
 import io.github.ilevs.p2pmusic.search.Rutor
+import io.github.ilevs.p2pmusic.search.SearchResult
+import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.search.open
+import io.github.ilevs.p2pmusic.search.prefetch
 import io.github.ilevs.p2pmusic.search.trackerHttpClient
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
@@ -60,12 +64,38 @@ class UserPathLiveTest {
         val (hash, openMs) =
             TorrentEngine(temp.newFolder()).use { engine -> timed { source.open(pick, engine).infoHash() } }
         assertEquals(info.infoHash(), hash)
+        val warmMs = warmOpenMs(source, pick)
+
+        // NNM-Club opens by its magnet alone: what the prefetch is for. The album only it had on 2026-11-28.
+        val nnm = NnmClub(client = { client })
+        val nnmPick = nnm.search("Little Big Antipositive").maxByOrNull { it.seeds }
+        println("NNM pick: $nnmPick")
+        if (nnmPick != null) {
+            // Warm first, so a swarm that wakes up during the test favours the cold open, not the warm one.
+            val nnmWarmMs = warmOpenMs(nnm, nnmPick)
+            val (_, nnmColdMs) =
+                TorrentEngine(temp.newFolder()).use { engine -> timed { runCatching { nnm.open(nnmPick, engine) } } }
+            println("METRIC nnm_release_open_warm_ms=$nnmWarmMs")
+            println("METRIC nnm_release_open_cold_ms=$nnmColdMs")
+        }
 
         // Collected into the CI job summary, to compare builds.
         println("METRIC torrent_file_ms=$torrentMs")
         println("METRIC magnet_metadata_cold_ms=${if (magnet.isSuccess) coldMs else "none_in_${MAGNET_FIRST_MS}_ms"}")
         println("METRIC release_open_ms=$openMs")
+        println("METRIC release_open_warm_ms=$warmMs")
     }
+
+    // The tap's open after the app prefetched the release while the user looked at the albums for USER_LOOKS_MS.
+    private fun warmOpenMs(
+        source: TorrentSource,
+        pick: SearchResult,
+    ): Long =
+        TorrentEngine(temp.newFolder()).use { engine ->
+            source.prefetch(pick, engine)
+            Thread.sleep(USER_LOOKS_MS)
+            timed { runCatching { source.open(pick, engine) } }.second
+        }
 
     private fun <T> timed(block: () -> T): Pair<T, Long> {
         val start = System.nanoTime()
@@ -74,5 +104,8 @@ class UserPathLiveTest {
 
     private companion object {
         const val MAGNET_FIRST_MS = 20_000L
+
+        // shortcut: a guess at how long a user reads the album list; measure it on a device if the numbers matter.
+        const val USER_LOOKS_MS = 5_000L
     }
 }
