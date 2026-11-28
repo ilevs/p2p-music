@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -113,7 +115,12 @@ private fun TrackList(
                     onValueChange = { magnet = it },
                     label = { Text(stringResource(R.string.magnet_label)) },
                     singleLine = true,
-                    modifier = Modifier.weight(1f).leaveOnUpDown(LocalFocusManager.current),
+                    keyboardOptions = KeyboardOptions.Default.onTapOnly(),
+                    modifier =
+                        Modifier
+                            .weight(
+                                1f,
+                            ).remoteKeys(LocalFocusManager.current, LocalSoftwareKeyboardController.current),
                 )
                 Button(
                     onClick = { controller.open(magnet.trim()) },

@@ -121,9 +121,13 @@ private fun SearchBar(
             onValueChange = onQuery,
             label = { Text(stringResource(R.string.search_label)) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search).onTapOnly(),
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            modifier = Modifier.weight(1f).leaveOnUpDown(LocalFocusManager.current),
+            modifier =
+                Modifier
+                    .weight(
+                        1f,
+                    ).remoteKeys(LocalFocusManager.current, LocalSoftwareKeyboardController.current),
         )
         Button(
             onClick = onSearch,

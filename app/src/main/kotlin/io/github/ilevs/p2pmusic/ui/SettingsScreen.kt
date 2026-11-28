@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -124,7 +125,11 @@ private fun Field(
         singleLine = true,
         visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions =
-            KeyboardOptions(keyboardType = if (isSecret) KeyboardType.Password else keyboardType),
-        modifier = modifier.fillMaxWidth().leaveOnUpDown(LocalFocusManager.current),
+            KeyboardOptions(keyboardType = if (isSecret) KeyboardType.Password else keyboardType).onTapOnly(),
+        modifier =
+            modifier.fillMaxWidth().remoteKeys(
+                LocalFocusManager.current,
+                LocalSoftwareKeyboardController.current,
+            ),
     )
 }
