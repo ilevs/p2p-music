@@ -19,8 +19,10 @@ class SearchCoverageLiveTest {
     fun countsTheAlbumsFound() {
         assumeTrue("LIVE_TESTS is not set", System.getenv("LIVE_TESTS") == "true")
         val client = trackerHttpClient(proxy = null)
-        val sources = listOf(Rutor(client = { client }), Knaben(client = { client }))
-        for (source in sources + AllSources(sources)) {
+        val rutor = Rutor(client = { client })
+        val knaben = Knaben(client = { client })
+        // "all" is the app's own setup: Knaben only when the trackers find nothing.
+        for (source in listOf(rutor, knaben, AllSources(listOf(rutor), fallback = listOf(knaben)))) {
             val times = mutableListOf<Long>()
             val found =
                 Albums.filter { album ->

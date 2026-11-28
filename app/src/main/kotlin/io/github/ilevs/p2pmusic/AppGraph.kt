@@ -85,7 +85,11 @@ class AppGraph(
 
     private val tracker = RuTracker(client = ::trackerClient, credentials = { settings.load().credentials() })
 
-    private val sources = AllSources(listOf(tracker, Rutor(client = ::trackerClient), Knaben(client = ::trackerClient)))
+    private val sources =
+        AllSources(
+            listOf(tracker, Rutor(client = ::trackerClient)),
+            fallback = listOf(Knaben(client = ::trackerClient)),
+        )
 
     val search = SearchController(sources, tracker, soulseek, settings, scope, io)
 

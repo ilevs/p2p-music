@@ -34,6 +34,17 @@ class AllSourcesTest {
     }
 
     @Test
+    fun asksTheFallbackOnlyWhenTheOthersFindNothing() {
+        var asked = 0
+        val fallback = FakeSource("Knaben") { listOf(found).also { asked++ } }
+        assertEquals(listOf(found.copy(source = "Rutor")), AllSources(listOf(working), listOf(fallback)).search("Кино"))
+        assertEquals(0, asked)
+        val sources = AllSources(listOf(blocked), listOf(fallback))
+        assertEquals(listOf(found.copy(source = "Knaben")), sources.search("Кино"))
+        assertEquals("Knaben", String(sources.torrentFile(found.copy(source = "Knaben"))))
+    }
+
+    @Test
     fun downloadsFromTheSourceThatFoundTheResult() {
         val sources = AllSources(listOf(blocked, working))
         assertEquals("Rutor", String(sources.torrentFile(found.copy(source = "Rutor"))))

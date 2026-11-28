@@ -34,29 +34,43 @@ interface TorrentSource {
 }
 
 /**
- * Searches every source at once, so one blocked or broken site does not stop the search.
- * Fails only when nothing was found and some source failed, saying what each source answered.
+ * Searches every source at once, so one blocked or broken site does not stop the search. The [fallback] sources
+ * only when those found nothing: what they find may open slower (2026-11-28 CI: with Knaben searched always,
+ * album tap to sound went from 6-10 s to 24-39 s). Fails only when nothing was found and some source failed,
+ * saying what each source answered.
  */
 class AllSources(
     private val sources: List<TorrentSource>,
+    private val fallback: List<TorrentSource> = emptyList(),
 ) : TorrentSource {
-    override val name = sources.joinToString { it.name }
+    override val name = (sources + fallback).joinToString { it.name }
 
     override fun search(query: String): List<SearchResult> {
-        val outcomes =
-            runBlocking(Dispatchers.IO) {
-                sources
-                    .map { source ->
-                        async { runCatching { source.search(query).map { it.copy(source = source.name) } } }
-                    }.awaitAll()
+        val outcomes = searchAll(sources, query)
+        val all =
+            if (outcomes.any { it.getOrDefault(emptyList()).isNotEmpty() }) {
+                outcomes
+            } else {
+                outcomes + searchAll(fallback, query)
             }
-        val results = outcomes.flatMap { it.getOrDefault(emptyList()) }
-        if (results.isEmpty() && outcomes.any { it.isFailure }) {
-            val answers = sources.zip(outcomes).map { (source, outcome) -> answer(source, outcome) }
+        val results = all.flatMap { it.getOrDefault(emptyList()) }
+        if (results.isEmpty() && all.any { it.isFailure }) {
+            val answers = (sources + fallback).zip(all).map { (source, outcome) -> answer(source, outcome) }
             throw IOException(answers.joinToString("; "))
         }
         return results
     }
+
+    private fun searchAll(
+        group: List<TorrentSource>,
+        query: String,
+    ): List<Result<List<SearchResult>>> =
+        runBlocking(Dispatchers.IO) {
+            group
+                .map { source ->
+                    async { runCatching { source.search(query).map { it.copy(source = source.name) } } }
+                }.awaitAll()
+        }
 
     private fun answer(
         source: TorrentSource,
@@ -72,7 +86,7 @@ class AllSources(
     ) = if (message.startsWith(source.name)) message else "${source.name}: $message"
 
     override fun torrentFile(result: SearchResult): ByteArray {
-        val source = sources.first { it.name == result.source }
+        val source = (sources + fallback).first { it.name == result.source }
         return try {
             source.torrentFile(result)
         } catch (e: IOException) {
