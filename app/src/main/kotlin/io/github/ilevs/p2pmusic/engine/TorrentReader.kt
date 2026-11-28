@@ -65,7 +65,7 @@ class TorrentReader(
         if (position >= span.size) return -1
         val piece = span.pieceAt(position)
         moveWindow(piece)
-        engine.awaitPiece(handle, piece)
+        engine.awaitUntil(Long.MAX_VALUE) { handle.havePiece(piece) }
         val toRead = minOf(length.toLong(), span.pieceEnd(position) - position).toInt()
         val input = file ?: RandomAccessFile(path, "r").also { file = it }
         input.seek(position)

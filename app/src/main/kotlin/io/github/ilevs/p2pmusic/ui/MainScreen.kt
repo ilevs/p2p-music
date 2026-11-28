@@ -110,7 +110,7 @@ private fun TabContent(
                     onTabChange(Tab.Player)
                 },
                 onOpen = { result ->
-                    graph.stream.openAlbum(null) { graph.search.open(result, graph.engine) }
+                    graph.stream.openAlbum(null) { graph.search.open(result) }
                     onTabChange(Tab.Player)
                 },
                 modifier = modifier,

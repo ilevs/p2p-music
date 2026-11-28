@@ -13,6 +13,7 @@ import io.github.ilevs.p2pmusic.playback.torrentAlbum
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.search.open
+import io.github.ilevs.p2pmusic.search.prefetch
 import io.github.ilevs.p2pmusic.toJson
 import io.github.ilevs.p2pmusic.toSavedAlbum
 import kotlinx.coroutines.CoroutineDispatcher
@@ -45,6 +46,9 @@ private const val RACE_MS = 60_000L
 private const val MAX_RELEASES_TRIED = 6
 private const val NANOS_IN_MS = 1_000_000
 
+// The albums a user is likely to tap: the top of the list. Each costs one tracker search and one magnet.
+private const val ALBUMS_PREFETCHED = 6
+
 // Shows in logcat under the tag "p2pmusic": which release was opened and how long each try took.
 private val log = Logger.getLogger("p2pmusic")
 
@@ -69,19 +73,37 @@ class CatalogController(
         MutableStateFlow(CatalogState(library = settings.library().map { it.album }, liked = settings.liked()))
     val state: StateFlow<CatalogState> = mutableState.asStateFlow()
 
+    private val searches = SearchCache(source)
+
     /** Puts [album] in "Мои альбомы", or takes it out when it is there. */
     fun toggleLike(album: Album) {
         settings.setLiked(album, state.value.liked.none { it.id == album.id })
         mutableState.update { it.copy(liked = settings.liked()) }
     }
 
-    /** Asks all catalogs at once and shows their albums together; fails only when every catalog fails. */
+    /**
+     * Asks all catalogs at once and shows their albums together; fails only when every catalog fails. Then, while
+     * the user looks at them, makes the search a tap would and fetches the metadata.
+     */
     fun search(query: String) {
         run {
             val answers = coroutineScope { catalogs.map { async { runCatching { it(query) } } }.awaitAll() }
             val failures = answers.mapNotNull { it.exceptionOrNull() }
             if (failures.size == answers.size) throw IOException(failures.joinToString("; ") { it.message ?: "$it" })
-            mutableState.update { it.copy(albums = mergeAlbums(answers.mapNotNull { a -> a.getOrNull() })) }
+            val albums = mergeAlbums(answers.mapNotNull { a -> a.getOrNull() })
+            mutableState.update { it.copy(albums = albums) }
+            // Each on its own, so a slow tracker or a silent magnet holds up no other album.
+            for (album in albums.take(ALBUMS_PREFETCHED)) {
+                scope.launch(io) {
+                    val started = System.nanoTime()
+                    // The release a tap opens first, when it opens it by its magnet; see lookInto.
+                    val pick = runCatching { rankTorrents(album, searches.search("${album.artist} ${album.title}")) }
+                    val first = pick.getOrNull()?.firstOrNull()?.takeIf { namesAlbum(album, it) }
+                    val magnet = runCatching { first?.let { source.prefetch(it, stream.engine) } }
+                    val ms = (System.nanoTime() - started) / NANOS_IN_MS
+                    log.info { "prefetch «${album.title}»: ${first?.source} «${first?.title}» $magnet in $ms ms" }
+                }
+            }
             null
         }
     }
@@ -94,7 +116,9 @@ class CatalogController(
      */
     fun open(album: Album) {
         stream.openAlbum(album.coverUrl) {
-            runCatching { openTorrent(album) }.getOrElse { openFromSoulseek(album, it.message ?: it.toString()) }
+            runCatching { openTorrent(album) }
+                .getOrElse { openFromSoulseek(album, it.message ?: it.toString()) }
+                .also { log.info { "album «${album.title}»: «${it.name}»" } }
         }
     }
 
@@ -113,10 +137,10 @@ class CatalogController(
     // the artist's most seeded release is often another album. The second search runs only if the first gave none.
     private fun openRelease(album: Album): TorrentHandle {
         val searched = System.nanoTime()
-        val exact = runCatching { source.search("${album.artist} ${album.title}") }.getOrDefault(emptyList())
+        val exact = runCatching { searches.search("${album.artist} ${album.title}") }.getOrDefault(emptyList())
         val searchMs = (System.nanoTime() - searched) / NANOS_IN_MS
         log.info { "search «${album.artist} ${album.title}»: ${exact.size} found in $searchMs ms" }
-        val wide by lazy { runCatching { source.search(album.artist) } }
+        val wide by lazy { runCatching { searches.search(album.artist) } }
         val picks =
             sequence {
                 yieldAll(rankTorrents(album, exact))
