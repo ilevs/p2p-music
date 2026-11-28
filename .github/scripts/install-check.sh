@@ -154,8 +154,10 @@ python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 searched=$(date +%s)
-for _ in $(seq 20); do
+for i in $(seq 60); do
   sleep 1
+  # MusicBrainz answers 503 for minutes to the runners' shared addresses: search again, as a user would.
+  [ $((i % 15)) -eq 0 ] && python3 "$here/tap.py" "Найти" > /dev/null
   # The row's "artist · year" line: the catalog also lists tributes named after the album.
   python3 "$here/tap.py" "Pink Floyd · 1973" && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
@@ -225,3 +227,77 @@ fi
 adb logcat -d -b crash | tail -40
 adb logcat -d | grep -iE "ExoPlayerImpl|PlaybackException|TorrentDataSource" | tail -20
 echo "Played a track."
+
+# Soulseek, the fallback source: the tracker proxy points nowhere, so both trackers fail and the catalog album
+# must come from Soulseek, the way a user hears an album the trackers do not have. One fixed account per
+# emulator: the server drops a session when the same name logs in elsewhere.
+echo "::group::Play a catalog album from Soulseek"
+page="$(adb shell getconf PAGE_SIZE 2>/dev/null | tr -d '\r')"
+user="p2pmusic-ci-$(adb shell getprop ro.build.version.sdk | tr -d '\r')-${page:-4096}"
+# Taps the element with text $1 (the $2-th, from 0), scrolling down until it shows.
+tap_scrolling() {
+  for _ in 1 2 3 4 5; do
+    python3 "$here/tap.py" "$1" "${2:-0}" > /dev/null && return 0
+    adb shell input swipe 160 500 160 150 300
+    sleep 1
+  done
+  return 1
+}
+# Types $2 into the field labelled $1 (the $3-th).
+type_into() {
+  tap_scrolling "$1" "${3:-0}" || fail "No field $1 on the settings screen"
+  adb shell input text "$2"
+  # Back hides the keyboard; without a keyboard it would leave the screen.
+  adb shell dumpsys input_method | grep -q "mInputShown=true" && adb shell input keyevent 4
+  sleep 1
+}
+# The tracker step put this album in the library, which plays it from the torrent: start clean.
+adb shell pm clear "$package"
+adb logcat -c
+adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
+sleep 10
+python3 "$here/tap.py" "Настройки" || fail "No settings tab"
+type_into "Логин" "$user" 1
+type_into "Пароль" "${SOULSEEK_PASSWORD:-p2pmusic-ci-not-secret}" 1
+type_into "Адрес" "127.0.0.1"
+type_into "Порт" "9"
+tap_scrolling "Сохранить" || fail "No save button"
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for i in $(seq 20); do
+  sleep 3
+  [ $((i % 5)) -eq 0 ] && python3 "$here/tap.py" "Найти" > /dev/null
+  python3 "$here/tap.py" "Pink Floyd · 1973" && break
+done || fail "The catalog shows no Pink Floyd album of 1973"
+tapped=$(date +%s)
+playing=
+for _ in $(seq 180); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
+    playing=yes
+    break
+  fi
+  python3 "$here/tap.py" "Плеер" > /dev/null || true
+done
+# "Пауза" shows only while the player renders audio; the position must also move.
+if [ -n "$playing" ]; then
+  metric soulseek_album_tap_to_sound_s "$tapped"
+  sleep 6
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  position="$(adb shell cat /sdcard/ui.xml | grep -o 'text="[0-9]*:[0-9]* / [^"]*"' | head -1)"
+  echo "Position after 6 s: $position"
+  if [ -z "$position" ] || echo "$position" | grep -q 'text="0:0[0-2] /'; then playing=; fi
+fi
+if [ -z "$playing" ]; then
+  adb exec-out screencap -p > screen-soulseek.png
+  echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -60
+  python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*Soulseek[^"]*"'
+  fail "The album does not play from Soulseek"
+fi
+adb exec-out screencap -p > screen-soulseek.png
+adb shell pidof "$package" > /dev/null || fail "The app died while playing from Soulseek"
+echo "::endgroup::"

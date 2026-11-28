@@ -18,6 +18,30 @@ val appVersionName = providers.gradleProperty("versionName").orNull ?: "0.1.0-lo
 val releaseKeystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")
 val hasReleaseKeystore = !releaseKeystorePath.isNullOrBlank() && file(releaseKeystorePath).exists()
 
+// The Soulseek client is Rust (native/soulseek): cargo-ndk builds it for the four ABIs, cargo for unit tests.
+val rustDir: File = rootProject.file("native/soulseek")
+val rustSources = fileTree(rustDir) { exclude("target") }
+val rustJniLibs = layout.buildDirectory.dir("rustJniLibs")
+val cargoNdk =
+    tasks.register<Exec>("cargoNdk") {
+        workingDir = rustDir
+        inputs.files(rustSources)
+        outputs.dir(rustJniLibs)
+        val abis = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64").flatMap { listOf("-t", it) }
+        commandLine(
+            listOf("cargo", "ndk", "--platform", "26") + abis +
+                listOf("-o", rustJniLibs.get().asFile.path, "build", "--release"),
+        )
+    }
+val cargoHost =
+    tasks.register<Exec>("cargoHost") {
+        workingDir = rustDir
+        inputs.files(rustSources)
+        outputs.file(File(rustDir, "target/release/libsoulseek.so"))
+        commandLine("cargo", "build", "--release")
+    }
+tasks.named("preBuild") { dependsOn(cargoNdk) }
+
 android {
     namespace = "io.github.ilevs.p2pmusic"
     compileSdk = 36
@@ -101,6 +125,10 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
+    sourceSets {
+        getByName("main") { jniLibs.srcDir(rustJniLibs) }
+    }
 }
 
 kotlin {
@@ -144,7 +172,10 @@ val extractLibtorrentJni =
     }
 
 tasks.withType<Test>().configureEach {
-    dependsOn(extractLibtorrentJni)
+    dependsOn(extractLibtorrentJni, cargoHost)
+    systemProperty("java.library.path", File(rustDir, "target/release").absolutePath)
+    // A native crash (libtorrent, the Soulseek library) leaves its report where CI prints it.
+    jvmArgs("-XX:ErrorFile=${layout.buildDirectory.get().asFile}/hs_err_pid%p.log")
     // LiveStreamTest prints swarm state and timings for the CI log.
     testLogging.showStandardStreams = true
     // The last test started names the culprit when the test JVM dies without a report.

@@ -14,6 +14,7 @@ import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.catalog.albumFiles
 import io.github.ilevs.p2pmusic.catalog.coverUrl
+import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.engine.TorrentRef
 import io.github.ilevs.p2pmusic.engine.isAudioFile
@@ -42,10 +43,19 @@ data class AudioFile(
     val index: Int,
     val name: String,
     val size: Long,
+    /** The media URI of a file outside a torrent (Soulseek); torrent files are addressed by [index]. */
+    val uri: String? = null,
 ) {
     /** The file's name without its folders and extension. */
     val title: String get() = name.substringAfterLast('/').substringBeforeLast('.')
 }
+
+/** An album ready to play: its torrent's [hash], or null for files outside a torrent, its [name] and [files]. */
+data class OpenedAlbum(
+    val hash: String?,
+    val name: String,
+    val files: List<AudioFile>,
+)
 
 data class StreamState(
     val torrentName: String? = null,
@@ -68,6 +78,7 @@ data class StreamState(
  */
 class StreamController(
     val engine: TorrentEngine,
+    val soulseek: SoulseekEngine,
     private val settings: SettingsStore,
     val player: Player,
     private val scope: CoroutineScope,
@@ -129,6 +140,15 @@ class StreamController(
         coverUrl: String? = null,
         onOpened: (hash: String) -> Unit = {},
         open: () -> TorrentHandle,
+    ) = openAlbum(album != null, coverUrl) {
+        torrentAlbum(open(), album).also { onOpened(checkNotNull(it.hash)) }
+    }
+
+    /** Opens the album that [open] returns off the main thread: a torrent or Soulseek files; [autoplay] plays it. */
+    fun openAlbum(
+        autoplay: Boolean,
+        coverUrl: String?,
+        open: () -> OpenedAlbum,
     ) {
         // The album before must not stay in the player while the next one loads, or after it failed to open.
         player.stop()
@@ -136,25 +156,17 @@ class StreamController(
         mutableState.update { StreamState(isLoading = true) }
         val mine = ++opens
         scope.launch {
-            val result =
-                runCatching {
-                    withContext(io) {
-                        val handle = open()
-                        val opened = handle.infoHash().toHex()
-                        (opened to listAudio(handle, album)).also { onOpened(opened) }
-                    }
-                }
+            val result = runCatching { withContext(io) { open() } }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
             result
-                .onSuccess { (opened, listed) ->
+                .onSuccess { (opened, name, files) ->
                     hash = opened
-                    val (name, files) = listed
                     mutableState.update {
                         it.copy(torrentName = name, files = files, isLoading = false, coverUrl = coverUrl)
                     }
                     watchStats()
-                    if (album != null) files.firstOrNull()?.let(::play)
+                    if (autoplay) files.firstOrNull()?.let(::play)
                 }.onFailure { error ->
                     mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
                 }
@@ -163,10 +175,11 @@ class StreamController(
 
     /** The opened torrent's audio files as a queue, for the player, the notification and the car. */
     fun queueItems(): List<MediaItem> {
-        val torrentHash = hash ?: return emptyList()
+        val torrentHash = hash
         val current = state.value
-        return current.files.map {
-            val uri = TorrentRef(torrentHash, it.index).toUri()
+        return current.files.mapNotNull {
+            val uri =
+                it.uri ?: torrentHash?.let { hash -> TorrentRef(hash, it.index).toUri() } ?: return@mapNotNull null
             MediaItem
                 .Builder()
                 .setMediaId(uri)
@@ -297,4 +310,13 @@ internal fun listAudio(
     val ofAlbum = if (album == null) files else albumFiles(album, name, files)
     if (album != null && ofAlbum.isEmpty()) throw IOException("В раздаче «$name» нет альбома «$album»")
     return name to ofAlbum
+}
+
+/** [handle]'s album as [listAudio] finds it. */
+internal fun torrentAlbum(
+    handle: TorrentHandle,
+    album: String?,
+): OpenedAlbum {
+    val (name, files) = listAudio(handle, album)
+    return OpenedAlbum(handle.infoHash().toHex(), name, files)
 }

@@ -28,8 +28,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - uses: ./.github/actions/rust
+
       - name: ktlint
         run: ./gradlew ktlintCheck --stacktrace
+
+      - name: Rust format and clippy
+        if: ${{ !cancelled() }}
+        working-directory: native/soulseek
+        run: cargo fmt --check && cargo clippy --release -- -D warnings -W clippy::pedantic
 
       - name: detekt
         if: ${{ !cancelled() }}
@@ -49,6 +56,12 @@ jobs:
           # Optional: RuTrackerLiveTest runs against the real site only when these secrets exist.
           RUTRACKER_LOGIN: ${{ secrets.RUTRACKER_LOGIN }}
           RUTRACKER_PASSWORD: ${{ secrets.RUTRACKER_PASSWORD }}
+          # SoulseekLiveTest: a throwaway CI account, created on its first login; secrets override it if it is ever taken.
+          SOULSEEK_LOGIN: ${{ secrets.SOULSEEK_LOGIN || 'p2pmusic-ci-jvm' }}
+          SOULSEEK_PASSWORD: ${{ secrets.SOULSEEK_PASSWORD || 'p2pmusic-ci-not-secret' }}
+          # soulseek-rs-lib writes its log here; printed below when the tests fail.
+          RUST_LOG: trace
+          LOG_FILE: ${{ runner.temp }}/soulseek.log
           # LiveStreamTest streams a public torrent from the real swarm. PRs only: the swarm sometimes
           # gives a runner no peers for minutes, and that must not block the release of merged code.
           LIVE_TESTS: ${{ github.event_name == 'pull_request' }}
@@ -74,6 +87,19 @@ jobs:
       - name: Speed metrics
         if: ${{ !cancelled() }}
         run: grep -rahoE "METRIC \S+" app/build/test-results/ | sort -u | tee -a "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Print the Soulseek log and JVM crash reports
+        if: ${{ !cancelled() }}
+        run: |
+          log="$RUNNER_TEMP/soulseek.log"
+          wc -l "$log" || true
+          # The transfer of the race winner: requests, queue answers, the file connection, first bytes.
+          grep -vE "Connection refused|disconnect$|child limit|Parent " "$log" \
+            | grep -iE "download|transfer|queue|upload|pierce|connecttopeer|F connection|file conn|offset|progress|fail|denied|error" \
+            | cut -c1-260 | head -120 || true
+          for f in $(find "$GITHUB_WORKSPACE" /tmp "$HOME" -name 'hs_err_pid*.log' 2>/dev/null); do
+            echo "== $f"; grep -A12 -E "^# (Problematic frame|C  \[)|^Current thread|^Native frames" "$f" | head -60
+          done
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace

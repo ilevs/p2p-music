@@ -2,8 +2,13 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
+import io.github.ilevs.p2pmusic.engine.SoulseekEngine
+import io.github.ilevs.p2pmusic.engine.toUri
+import io.github.ilevs.p2pmusic.playback.AudioFile
+import io.github.ilevs.p2pmusic.playback.OpenedAlbum
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.listAudio
+import io.github.ilevs.p2pmusic.playback.torrentAlbum
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.search.open
@@ -26,6 +31,12 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Base64
 
+// The first track of this many Soulseek users is requested at once; the first to send wins.
+private const val RACE_SIZE = 5
+private const val RACE_ROUNDS = 2
+
+// The file connection of a firewalled downloader (any phone behind NAT) opens about 41 s after the request.
+private const val RACE_MS = 60_000L
 private const val MAX_RELEASES_TRIED = 6
 
 data class CatalogState(
@@ -58,22 +69,23 @@ class CatalogController(
      * Plays from the library when the album was played before (works offline), else from a new release.
      * The search runs as part of the player's open, so the player drops the album before at once
      * and shows this one loading, then playing or the reason it was not found.
+     * Soulseek only when the trackers have no release that holds the album, or fail.
      */
     fun play(album: Album) {
-        stream.openHandle(
-            album.title,
-            album.coverUrl,
-            // Saved only once the torrent proved to hold the album: the artist search can pick one without it.
-            onOpened = { hash ->
-                settings.addToLibrary(SavedAlbum(album, hash))
-                mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
-            },
-        ) {
-            val saved = settings.library().firstOrNull { it.album.id == album.id }
-            // Older versions saved releases that do not hold the album; such a one is searched for again.
-            val kept = runCatching { saved?.let { stream.engine.handle(it.hash) }?.also { listAudio(it, album.title) } }
-            kept.getOrNull() ?: openRelease(album)
+        stream.openAlbum(autoplay = true, album.coverUrl) {
+            runCatching { openTorrent(album) }.getOrElse { playFromSoulseek(album, it.message ?: it.toString()) }
         }
+    }
+
+    // The saved release, else a new one; saved only once the torrent proved to hold the album.
+    private fun openTorrent(album: Album): OpenedAlbum {
+        val saved = settings.library().firstOrNull { it.album.id == album.id }
+        // Older versions saved releases that do not hold the album; such a one is searched for again.
+        val kept = runCatching { saved?.let { torrentAlbum(stream.engine.handle(it.hash), album.title) } }
+        val opened = kept.getOrNull() ?: torrentAlbum(openRelease(album), album.title)
+        settings.addToLibrary(SavedAlbum(album, checkNotNull(opened.hash)))
+        mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
+        return opened
     }
 
     // Tries the releases found for the album, then those found by the artist alone, until one holds the album:
@@ -108,6 +120,43 @@ class CatalogController(
                 }
             handle.also { listAudio(it, album.title) }
         }.getOrNull()
+
+    /**
+     * Races the first track of the best few Soulseek users that have [album] in a folder of its own; the winner
+     * sends the rest of the album right after it, so the next track is on disk before it is needed.
+     * [why] says what the trackers said.
+     */
+    private fun playFromSoulseek(
+        album: Album,
+        why: String,
+    ): OpenedAlbum {
+        val soulseek = connectSoulseek(why)
+        val folders =
+            soulseekFolders(
+                album,
+                soulseek.search("${album.artist} ${album.title}") { enoughToRace(album, it, RACE_SIZE) },
+            )
+        if (folders.isEmpty()) throw IOException("$why; в Soulseek «${album.title}» тоже нет")
+        val tracks =
+            folders
+                .take(RACE_SIZE * RACE_ROUNDS)
+                .chunked(RACE_SIZE)
+                .firstNotNullOfOrNull { round ->
+                    soulseek.race(round.map { it.first() }, RACE_MS)?.let { winner -> round.first { it[0] == winner } }
+                } ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
+        tracks.drop(1).forEach { runCatching { soulseek.download(it) } }
+        return OpenedAlbum(null, album.title, tracks.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
+    }
+
+    private fun connectSoulseek(why: String): SoulseekEngine {
+        val user = settings.load()
+        if (user.soulseekLogin.isBlank()) {
+            throw IOException(
+                "$why. Впишите логин Soulseek в настройках, чтобы искать и там",
+            )
+        }
+        return stream.soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
+    }
 
     /** Writes the library with each album's .torrent, so another device plays it without the tracker. */
     fun exportLibrary(output: OutputStream) {

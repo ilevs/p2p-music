@@ -1,0 +1,24 @@
+[package]
+name = "p2pmusic-soulseek"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "soulseek"
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = "=0.21.1"
+# Pinned: the library breaks its API often (20 majors in a year).
+soulseek-rs-lib = "=20.0.0"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+
+# 20.0.0 with one fix: it compares a u32 rlimit with a u64 on 32-bit Android (armeabi-v7a, x86).
+# shortcut: a vendored copy; drop it when an upstream release compiles for those targets.
+[patch.crates-io]
+soulseek-rs-lib = { path = "vendor/soulseek-rs-lib" }
