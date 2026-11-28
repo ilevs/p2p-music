@@ -158,6 +158,7 @@ class StreamController(
         player.stop()
         player.clearMediaItems()
         mutableState.update { StreamState(isLoading = true) }
+        watchStats()
         val mine = ++opens
         scope.launch {
             val result = runCatching { withContext(io) { open() } }
@@ -277,7 +278,10 @@ class StreamController(
             scope.launch {
                 while (isActive) {
                     val handle = withContext(io) { hash?.let(engine::find) }
-                    if (handle != null) {
+                    if (state.value.isLoading) {
+                        // The DHT alone while an album opens: the peers and trackers of the album before would mislead.
+                        mutableState.update { it.copy(dhtNodes = engine.dhtNodes) }
+                    } else if (handle != null) {
                         val (status, trackers) = withContext(io) { handle.status() to trackerCounts(handle) }
                         // A disk error pauses the torrent silently; without this the track just never starts.
                         val diskError = status.errorCode().takeIf { it.isError }?.message
