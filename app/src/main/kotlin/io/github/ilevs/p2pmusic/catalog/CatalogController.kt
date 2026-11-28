@@ -28,9 +28,11 @@ import java.io.OutputStream
 import java.util.Base64
 
 // The first track of this many Soulseek users is requested at once; the first to send wins.
-private const val RACE_SIZE = 3
+private const val RACE_SIZE = 5
 private const val RACE_ROUNDS = 2
-private const val RACE_MS = 20_000L
+
+// The file connection of a firewalled downloader (any phone behind NAT) opens about 41 s after the request.
+private const val RACE_MS = 60_000L
 
 data class CatalogState(
     val albums: List<Album> = emptyList(),
