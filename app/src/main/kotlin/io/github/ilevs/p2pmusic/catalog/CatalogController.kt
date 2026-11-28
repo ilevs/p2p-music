@@ -11,6 +11,7 @@ import io.github.ilevs.p2pmusic.playback.listAudio
 import io.github.ilevs.p2pmusic.playback.torrentAlbum
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
+import io.github.ilevs.p2pmusic.parseAlbums
 import io.github.ilevs.p2pmusic.search.open
 import io.github.ilevs.p2pmusic.toJson
 import io.github.ilevs.p2pmusic.toSavedAlbum
@@ -50,6 +51,7 @@ private val log = Logger.getLogger("p2pmusic")
 data class CatalogState(
     val albums: List<Album> = emptyList(),
     val library: List<Album> = emptyList(),
+    val liked: List<Album> = emptyList(),
     val isLoading: Boolean = false,
     val message: String? = null,
 )
@@ -63,8 +65,15 @@ class CatalogController(
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
 ) {
-    private val mutableState = MutableStateFlow(CatalogState(library = settings.library().map { it.album }))
+    private val mutableState =
+        MutableStateFlow(CatalogState(library = settings.library().map { it.album }, liked = settings.liked()))
     val state: StateFlow<CatalogState> = mutableState.asStateFlow()
+
+    /** Puts [album] in "Мои альбомы", or takes it out when it is there. */
+    fun toggleLike(album: Album) {
+        settings.setLiked(album, state.value.liked.none { it.id == album.id })
+        mutableState.update { it.copy(liked = settings.liked()) }
+    }
 
     /** Asks all catalogs at once and shows their albums together; fails only when every catalog fails. */
     fun search(query: String) {
@@ -178,7 +187,7 @@ class CatalogController(
         return stream.soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
     }
 
-    /** Writes the library with each album's .torrent, so another device plays it without the tracker. */
+    /** Writes the history with each album's .torrent and the liked albums, so another device plays them without the tracker. */
     fun exportLibrary(output: OutputStream) {
         run {
             val albums =
@@ -186,7 +195,10 @@ class CatalogController(
                     val torrent = File(stream.engine.torrentsDir, "${saved.hash}.torrent").takeIf { it.exists() }
                     saved.toJson().put("torrent", torrent?.readBytes()?.let(Base64.getEncoder()::encodeToString))
                 }
-            output.use { it.write(JSONObject().put("albums", JSONArray(albums)).toString().toByteArray()) }
+            val liked = JSONArray(settings.liked().map { it.toJson() })
+            output.use {
+                it.write(JSONObject().put("albums", JSONArray(albums)).put("liked", liked).toString().toByteArray())
+            }
             "Сохранено альбомов: ${albums.size}"
         }
     }
@@ -194,7 +206,10 @@ class CatalogController(
     /** Adds albums from an export file; their .torrent files are checked and cached. */
     fun importLibrary(input: InputStream) {
         run {
-            val albums = JSONObject(input.use { String(it.readBytes()) }).getJSONArray("albums")
+            val file = JSONObject(input.use { String(it.readBytes()) })
+            // Files from before likes have no "liked".
+            parseAlbums(file.optJSONArray("liked")?.toString() ?: "[]").reversed().forEach { settings.setLiked(it, true) }
+            val albums = file.getJSONArray("albums")
             // Oldest first, so the file's order survives addToLibrary putting each one on top.
             for (i in albums.length() - 1 downTo 0) {
                 val item = albums.getJSONObject(i)
@@ -208,7 +223,7 @@ class CatalogController(
                     }
                 settings.addToLibrary(item.toSavedAlbum().let { if (hash != null) it.copy(hash = hash) else it })
             }
-            mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
+            mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }, liked = settings.liked()) }
             "Добавлено альбомов: ${albums.length()}"
         }
     }

@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,12 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -94,12 +101,22 @@ fun SearchScreen(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        val showLibrary = showAlbums && catalogState.albums.isEmpty() && catalogState.library.isNotEmpty()
-        if (showLibrary) Text(text = stringResource(R.string.library), style = MaterialTheme.typography.titleMedium)
+        // An empty field brings back the liked albums and the history.
+        val showLibrary = showAlbums && (query.isBlank() || catalogState.albums.isEmpty())
+        val liked = catalogState.liked.map { it.id }.toSet()
         SearchResults(
-            albums = if (showAlbums) catalogState.albums.ifEmpty { catalogState.library } else null,
+            albums =
+                when {
+                    !showAlbums -> null
+                    showLibrary -> catalogState.liked
+                    else -> catalogState.albums
+                },
+            history = if (showLibrary) catalogState.library.filterNot { it.id in liked } else emptyList(),
+            liked = liked,
+            showHeaders = showLibrary,
             results = state.results,
             onAlbum = onAlbum,
+            onLike = catalog::toggleLike,
             onOpen = onOpen,
             modifier = Modifier.weight(1f),
         )
@@ -132,25 +149,25 @@ private fun SearchBar(
     }
 }
 
+/** [albums] with [history] under them (both titled when [showHeaders]) when not null, else tracker [results]. */
 @Composable
 private fun SearchResults(
     albums: List<Album>?,
+    history: List<Album>,
+    liked: Set<String>,
+    showHeaders: Boolean,
     results: List<SearchResult>,
     onAlbum: (Album) -> Unit,
+    onLike: (Album) -> Unit,
     onOpen: (SearchResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
         if (albums != null) {
-            items(albums, key = { it.id }) { album ->
-                TwoLineRow(
-                    title = album.title,
-                    details = listOf(album.artist, album.year).filter(String::isNotEmpty).joinToString(" · "),
-                    onClick = { onAlbum(album) },
-                    coverUrl = album.coverUrl,
-                )
-                HorizontalDivider()
-            }
+            if (showHeaders && albums.isNotEmpty()) item { Header(R.string.library) }
+            albumItems(albums, liked, onAlbum, onLike)
+            if (history.isNotEmpty()) item { Header(R.string.history) }
+            albumItems(history, liked, onAlbum, onLike)
         } else {
             items(results, key = { "${it.source}/${it.id}" }) { result ->
                 TwoLineRow(
@@ -170,6 +187,43 @@ private fun SearchResults(
     }
 }
 
+private fun LazyListScope.albumItems(
+    albums: List<Album>,
+    liked: Set<String>,
+    onAlbum: (Album) -> Unit,
+    onLike: (Album) -> Unit,
+) {
+    items(albums, key = { it.id }) { album ->
+        val isLiked = album.id in liked
+        val name = "${album.artist} — ${album.title}"
+        TwoLineRow(
+            title = album.title,
+            details = listOf(album.artist, album.year).filter(String::isNotEmpty).joinToString(" · "),
+            onClick = { onAlbum(album) },
+            coverUrl = album.coverUrl,
+        ) {
+            IconButton(onClick = { onLike(album) }) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = stringResource(if (isLiked) R.string.unlike else R.string.like, name),
+                )
+            }
+        }
+        HorizontalDivider()
+    }
+}
+
+@Composable
+private fun Header(
+    @StringRes text: Int,
+) {
+    Text(
+        text = stringResource(text),
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(vertical = 8.dp),
+    )
+}
+
 @Composable
 private fun TwoLineRow(
     title: String,
@@ -177,6 +231,7 @@ private fun TwoLineRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     coverUrl: String? = null,
+    trailing: @Composable () -> Unit = {},
 ) {
     Row(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
@@ -184,7 +239,7 @@ private fun TwoLineRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         coverUrl?.let { Cover(url = it, modifier = Modifier.size(56.dp)) }
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(text = title, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
                 text = details,
@@ -193,5 +248,6 @@ private fun TwoLineRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        trailing()
     }
 }
