@@ -74,7 +74,7 @@ class RuTrackerTest {
     fun tellsAForeignPageFromABadPassword() {
         server.enqueue(page("<title>Доступ ограничен</title>").setResponseCode(403))
         val message = runCatching { tracker.login() }.exceptionOrNull()?.message.orEmpty()
-        assertTrue(message, message.contains("“Доступ ограничен” (HTTP 403)"))
+        assertTrue(message, message.contains("“Доступ ограничен” came back (HTTP 403)"))
     }
 
     @Test
