@@ -1,4 +1,4 @@
-"""Taps the on-screen element whose text contains the argument, the first or the n-th (from 0). Usage: tap.py <text> [n]."""
+"""Taps the on-screen element whose text contains the argument (or equals it after a leading "="), the first or the n-th (from 0). Usage: tap.py <text> [n]."""
 import re
 import subprocess
 import sys
@@ -10,7 +10,8 @@ def tap(text, n=0):
     subprocess.run(["adb", "shell", "uiautomator", "dump", "/sdcard/ui.xml"], check=True, capture_output=True)
     xml = subprocess.run(["adb", "shell", "cat", "/sdcard/ui.xml"], check=True, capture_output=True).stdout
     for node in ET.fromstring(xml).iter("node"):
-        if text in node.get("text", "") + node.get("content-desc", ""):
+        label = node.get("text", "") + node.get("content-desc", "")
+        if label == text[1:] if text.startswith("=") else text in label:
             if n > 0:
                 n -= 1
                 continue
