@@ -90,7 +90,10 @@ class SearchController(
             runCatching {
                 check(user.soulseekLogin.isNotBlank()) { "впишите логин в Настройках, раздел Soulseek" }
                 soulseek.connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding)
-                audioFolders(soulseek.search(query) { audioFolders(it).size >= ENOUGH_FOLDERS }).take(MAX_FOLDERS)
+                // Whole albums before folders with a single track; stable, so a free slot still leads within.
+                audioFolders(soulseek.search(query) { audioFolders(it).size >= ENOUGH_FOLDERS })
+                    .sortedByDescending { it.size }
+                    .take(MAX_FOLDERS)
             }
         val list = found.getOrDefault(emptyList())
         folders = list.associateBy(::folderId)
