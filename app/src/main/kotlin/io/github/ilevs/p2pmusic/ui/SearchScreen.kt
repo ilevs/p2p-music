@@ -103,16 +103,10 @@ fun SearchScreen(
         }
         // An empty field brings back the liked albums and the history.
         val showLibrary = showAlbums && (query.isBlank() || catalogState.albums.isEmpty())
-        val liked = catalogState.liked.map { it.id }.toSet()
         SearchResults(
-            albums =
-                when {
-                    !showAlbums -> null
-                    showLibrary -> catalogState.liked
-                    else -> catalogState.albums
-                },
-            history = if (showLibrary) catalogState.library.filterNot { it.id in liked } else emptyList(),
-            liked = liked,
+            albums = if (showLibrary) catalogState.liked else catalogState.albums.takeIf { showAlbums },
+            history = if (showLibrary) catalogState.library else emptyList(),
+            liked = catalogState.liked.map { it.id }.toSet(),
             showHeaders = showLibrary,
             results = state.results,
             onAlbum = onAlbum,
@@ -149,7 +143,7 @@ private fun SearchBar(
     }
 }
 
-/** [albums] with [history] under them (both titled when [showHeaders]) when not null, else tracker [results]. */
+/** [albums] with the [history] not [liked] under them (titled when [showHeaders]) when not null, else [results]. */
 @Composable
 private fun SearchResults(
     albums: List<Album>?,
@@ -166,8 +160,8 @@ private fun SearchResults(
         if (albums != null) {
             if (showHeaders && albums.isNotEmpty()) item { Header(R.string.library) }
             albumItems(albums, liked, onAlbum, onLike)
-            if (history.isNotEmpty()) item { Header(R.string.history) }
-            albumItems(history, liked, onAlbum, onLike)
+            if (history.any { it.id !in liked }) item { Header(R.string.history) }
+            albumItems(history.filterNot { it.id in liked }, liked, onAlbum, onLike)
         } else {
             items(results, key = { "${it.source}/${it.id}" }) { result ->
                 TwoLineRow(
@@ -231,7 +225,7 @@ private fun TwoLineRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     coverUrl: String? = null,
-    trailing: @Composable () -> Unit = {},
+    content: @Composable () -> Unit = {},
 ) {
     Row(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
@@ -248,6 +242,6 @@ private fun TwoLineRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        trailing()
+        content()
     }
 }

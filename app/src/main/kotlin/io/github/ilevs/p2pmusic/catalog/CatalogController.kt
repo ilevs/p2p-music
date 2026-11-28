@@ -2,8 +2,8 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
-import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.toUri
+import io.github.ilevs.p2pmusic.parseAlbums
 import io.github.ilevs.p2pmusic.playback.AudioFile
 import io.github.ilevs.p2pmusic.playback.OpenedAlbum
 import io.github.ilevs.p2pmusic.playback.StreamController
@@ -11,7 +11,6 @@ import io.github.ilevs.p2pmusic.playback.listAudio
 import io.github.ilevs.p2pmusic.playback.torrentAlbum
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
-import io.github.ilevs.p2pmusic.parseAlbums
 import io.github.ilevs.p2pmusic.search.open
 import io.github.ilevs.p2pmusic.toJson
 import io.github.ilevs.p2pmusic.toSavedAlbum
@@ -160,7 +159,11 @@ class CatalogController(
         album: Album,
         why: String,
     ): OpenedAlbum {
-        val soulseek = connectSoulseek(why)
+        val user = settings.load()
+        if (user.soulseekLogin.isBlank()) {
+            throw IOException("$why. Впишите логин Soulseek в настройках, чтобы искать и там")
+        }
+        val soulseek = stream.soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
         val folders =
             soulseekFolders(
                 album,
@@ -177,17 +180,7 @@ class CatalogController(
         return OpenedAlbum(null, album.title, tracks.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
     }
 
-    private fun connectSoulseek(why: String): SoulseekEngine {
-        val user = settings.load()
-        if (user.soulseekLogin.isBlank()) {
-            throw IOException(
-                "$why. Впишите логин Soulseek в настройках, чтобы искать и там",
-            )
-        }
-        return stream.soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
-    }
-
-    /** Writes the history with each album's .torrent and the liked albums, so another device plays them without the tracker. */
+    /** Writes the history with each album's .torrent, and the liked albums, so another device plays them offline. */
     fun exportLibrary(output: OutputStream) {
         run {
             val albums =
@@ -196,9 +189,8 @@ class CatalogController(
                     saved.toJson().put("torrent", torrent?.readBytes()?.let(Base64.getEncoder()::encodeToString))
                 }
             val liked = JSONArray(settings.liked().map { it.toJson() })
-            output.use {
-                it.write(JSONObject().put("albums", JSONArray(albums)).put("liked", liked).toString().toByteArray())
-            }
+            val file = JSONObject().put("albums", JSONArray(albums)).put("liked", liked)
+            output.use { it.write(file.toString().toByteArray()) }
             "Сохранено альбомов: ${albums.size}"
         }
     }
@@ -208,7 +200,8 @@ class CatalogController(
         run {
             val file = JSONObject(input.use { String(it.readBytes()) })
             // Files from before likes have no "liked".
-            parseAlbums(file.optJSONArray("liked")?.toString() ?: "[]").reversed().forEach { settings.setLiked(it, true) }
+            val liked = parseAlbums(file.optJSONArray("liked")?.toString() ?: "[]")
+            liked.reversed().forEach { settings.setLiked(it, true) }
             val albums = file.getJSONArray("albums")
             // Oldest first, so the file's order survives addToLibrary putting each one on top.
             for (i in albums.length() - 1 downTo 0) {
@@ -223,7 +216,8 @@ class CatalogController(
                     }
                 settings.addToLibrary(item.toSavedAlbum().let { if (hash != null) it.copy(hash = hash) else it })
             }
-            mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }, liked = settings.liked()) }
+            val library = settings.library().map { it.album }
+            mutableState.update { it.copy(library = library, liked = settings.liked()) }
             "Добавлено альбомов: ${albums.length()}"
         }
     }
