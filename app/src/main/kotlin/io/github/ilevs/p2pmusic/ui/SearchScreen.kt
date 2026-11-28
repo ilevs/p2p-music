@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,7 +57,10 @@ fun SearchScreen(
     var showAlbums by rememberSaveable { mutableStateOf(true) }
     val isLoading = if (showAlbums) catalogState.isLoading else state.isLoading
     val message = if (showAlbums) catalogState.message else state.message
+    val keyboard = LocalSoftwareKeyboardController.current
     val search = {
+        // The keyboard stays up otherwise and covers the results, which the app draws under it.
+        keyboard?.hide()
         when {
             query.isBlank() -> Unit
             showAlbums -> catalog.search(query.trim())
