@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.TorrentHandle
+import java.io.IOException
 
 private const val STATS_INTERVAL_MS = 1_000L
 private const val SAVE_INTERVAL_MS = 5_000L
@@ -44,6 +45,16 @@ data class AudioFile(
     val size: Long,
     /** The media URI of a file outside a torrent (Soulseek); torrent files are addressed by [index]. */
     val uri: String? = null,
+) {
+    /** The file's name without its folders and extension. */
+    val title: String get() = name.substringAfterLast('/').substringBeforeLast('.')
+}
+
+/** An album ready to play: its torrent's [hash], or null for files outside a torrent, its [name] and [files]. */
+data class OpenedAlbum(
+    val hash: String?,
+    val name: String,
+    val files: List<AudioFile>,
 )
 
 data class StreamState(
@@ -78,6 +89,7 @@ class StreamController(
 
     @Volatile
     private var hash: String? = null
+    private var opens = 0
     private var startClock = 0L
     private var seekClock = 0L
     private var statsJob: Job? = null
@@ -90,7 +102,7 @@ class StreamController(
                     if (playbackState == Player.STATE_READY) onReady()
                 }
 
-                override fun onPlayerError(error: PlaybackException) = onError()
+                override fun onPlayerError(error: PlaybackException) = onError(error)
             },
         )
         // The car can lose power at any moment, so the spot to resume from is saved while playing.
@@ -120,44 +132,48 @@ class StreamController(
 
     /**
      * Opens the torrent that [open] returns off the main thread.
-     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it.
+     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it;
+     * a torrent without the album is an error, and [onOpened] runs only for a torrent that has it.
      */
     fun openHandle(
         album: String? = null,
         coverUrl: String? = null,
+        onOpened: (hash: String) -> Unit = {},
         open: () -> TorrentHandle,
+    ) = openAlbum(album != null, coverUrl) {
+        torrentAlbum(open(), album).also { onOpened(checkNotNull(it.hash)) }
+    }
+
+    /** Opens the album that [open] returns off the main thread, a torrent or files from Soulseek; [autoplay] plays it. */
+    fun openAlbum(
+        autoplay: Boolean,
+        coverUrl: String?,
+        open: () -> OpenedAlbum,
     ) {
+        // The album before must not stay in the player while the next one loads, or after it failed to open.
+        player.stop()
+        player.clearMediaItems()
         mutableState.update { StreamState(isLoading = true) }
+        val mine = ++opens
         scope.launch {
-            runCatching { withContext(io) { listAudio(open().also { hash = it.infoHash().toHex() }) } }
-                .onSuccess { (name, all) ->
-                    val files = album?.let { albumFiles(it, all) } ?: all
+            val result = runCatching { withContext(io) { open() } }
+            // A slower open of an album tapped earlier must not replace the one tapped after it.
+            if (mine != opens) return@launch
+            result
+                .onSuccess { (opened, name, files) ->
+                    hash = opened
                     mutableState.update {
                         it.copy(torrentName = name, files = files, isLoading = false, coverUrl = coverUrl)
                     }
                     watchStats()
-                    if (album != null) files.firstOrNull()?.let(::play)
+                    if (autoplay) files.firstOrNull()?.let(::play)
                 }.onFailure { error ->
                     mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
                 }
         }
     }
 
-    /** Plays [files] that are not in a torrent, e.g. from Soulseek, as the album [name]. Any thread. */
-    fun openFiles(
-        name: String,
-        coverUrl: String?,
-        files: List<AudioFile>,
-    ) {
-        scope.launch {
-            hash = null
-            statsJob?.cancel()
-            mutableState.update { StreamState(torrentName = name, files = files, coverUrl = coverUrl) }
-            files.firstOrNull()?.let(::play)
-        }
-    }
-
-    /** The opened album's audio files as a queue, for the player, the notification and the car. */
+    /** The opened torrent's audio files as a queue, for the player, the notification and the car. */
     fun queueItems(): List<MediaItem> {
         val torrentHash = hash
         val current = state.value
@@ -171,7 +187,7 @@ class StreamController(
                 .setMediaMetadata(
                     MediaMetadata
                         .Builder()
-                        .setTitle(it.name.substringAfterLast('/').substringBeforeLast('.'))
+                        .setTitle(it.title)
                         .setAlbumTitle(current.torrentName)
                         // The notification and the car show it too.
                         .setArtworkUri(current.coverUrl?.let(Uri::parse))
@@ -188,7 +204,7 @@ class StreamController(
         val files = state.value.files
         startClock = SystemClock.elapsedRealtime()
         seekClock = 0L
-        mutableState.update { it.copy(startupMs = null) }
+        mutableState.update { it.copy(startupMs = null, error = null) }
         player.setMediaItems(items, files.indexOf(file), 0L)
         player.prepare()
         player.play()
@@ -202,11 +218,15 @@ class StreamController(
     // shortcut: one retry per track, because libtorrent reports a piece as verified while its blocks still wait
     // in the write queue, and the file then reads as zeros ("no extractor could read the stream"); read through
     // libtorrent's read_piece if errors show up in the middle of tracks.
-    internal fun onError() {
+    internal fun onError(error: PlaybackException) {
         val track = player.currentMediaItem?.mediaId
         if (track != null && track != retriedTrack) {
             retriedTrack = track
             player.prepare()
+        } else {
+            // Without this the player just sits at 0:00 with no reason on screen.
+            val reason = error.cause?.message ?: error.errorCodeName
+            mutableState.update { it.copy(error = "Трек не играет: $reason") }
         }
     }
 
@@ -229,9 +249,11 @@ class StreamController(
     @OptIn(UnstableApi::class) // MediaItemsWithStartPosition, the only way to resume at a position
     suspend fun restore(saved: SavedAlbum? = null): MediaSession.MediaItemsWithStartPosition? {
         val spot = saved?.let { LastPlayed(it.hash, -1, 0L) } ?: settings.lastPlayed() ?: return null
-        val (name, all) = withContext(io) { listAudio(engine.handle(spot.hash)) }
+        // A torrent saved for an album it does not hold (a discography picked by older versions) is not resumed.
+        val (name, files) =
+            runCatching { withContext(io) { listAudio(engine.handle(spot.hash), saved?.album?.title) } }
+                .getOrDefault(null to emptyList())
         hash = spot.hash
-        val files = saved?.let { albumFiles(it.album.title, all) } ?: all
         mutableState.update { StreamState(torrentName = name, files = files, coverUrl = saved?.album?.coverUrl) }
         watchStats()
         val index = if (saved != null) 0 else files.indexOfFirst { it.index == spot.fileIndex }
@@ -272,8 +294,11 @@ class StreamController(
     }
 }
 
-/** The torrent's name and its audio files, sorted by path. */
-internal fun listAudio(handle: TorrentHandle): Pair<String, List<AudioFile>> {
+// With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.
+internal fun listAudio(
+    handle: TorrentHandle,
+    album: String? = null,
+): Pair<String, List<AudioFile>> {
     val info = handle.torrentFile()
     val storage = info.files()
     val files =
@@ -281,5 +306,17 @@ internal fun listAudio(handle: TorrentHandle): Pair<String, List<AudioFile>> {
             .filter { isAudioFile(storage.fileName(it)) }
             .map { AudioFile(it, storage.filePath(it), storage.fileSize(it)) }
             .sortedBy { it.name }
-    return info.name() to files
+    val name = info.name()
+    val ofAlbum = if (album == null) files else albumFiles(album, name, files)
+    if (album != null && ofAlbum.isEmpty()) throw IOException("В раздаче «$name» нет альбома «$album»")
+    return name to ofAlbum
+}
+
+/** [handle]'s album as [listAudio] finds it. */
+internal fun torrentAlbum(
+    handle: TorrentHandle,
+    album: String?,
+): OpenedAlbum {
+    val (name, files) = listAudio(handle, album)
+    return OpenedAlbum(handle.infoHash().toHex(), name, files)
 }
