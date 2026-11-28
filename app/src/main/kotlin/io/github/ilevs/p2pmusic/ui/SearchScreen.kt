@@ -108,7 +108,12 @@ fun SearchScreen(
 
 /** Albums when [albums] is not null, otherwise tracker [results]. */
 @Composable
-private fun SearchBar(query: String, onQuery: (String) -> Unit, enabled: Boolean, onSearch: () -> Unit) {
+private fun SearchBar(
+    query: String,
+    onQuery: (String) -> Unit,
+    enabled: Boolean,
+    onSearch: () -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = query,
