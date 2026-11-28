@@ -37,9 +37,16 @@ class UserPathLiveTest {
         val results = source.search("${album.artist} ${album.title}")
         println("$album: ${results.size} releases, top ${results.sortedByDescending { it.seeds }.take(3)}")
         val pick =
-            checkNotNull(pickTorrent(album, results) ?: pickTorrent(album, source.search(album.artist))) {
+            checkNotNull(rankTorrents(album, results).firstOrNull()) {
                 "No release with seeds for $album among $results"
             }
+
+        // What the trackers hold for the album ilia could not open on 2026-11-28: read in the CI log.
+        val hard = Album("", "Трудно быть с Богом", "Слава КПСС", "")
+        val exact = runCatching { source.search("${hard.artist} ${hard.title}") }
+        val wide = runCatching { source.search(hard.artist) }
+        println("HARD exact: ${exact.map { found -> found.map { "${it.seeds} ${it.title}" } }}")
+        println("HARD artist: ${wide.map { found -> rankTorrents(hard, found).map { "${it.seeds} ${it.title}" } }}")
 
         val (info, torrentMs) = timed { TorrentInfo.bdecode(source.torrentFile(pick)) }
         assertTrue(info.isValid && info.numFiles() > 0)

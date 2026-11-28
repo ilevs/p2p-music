@@ -7,6 +7,7 @@ import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.playback.AudioFile
 import io.github.ilevs.p2pmusic.playback.OpenedAlbum
 import io.github.ilevs.p2pmusic.playback.StreamController
+import io.github.ilevs.p2pmusic.playback.listAudio
 import io.github.ilevs.p2pmusic.playback.torrentAlbum
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import org.libtorrent4j.TorrentHandle
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -35,6 +37,7 @@ private const val RACE_ROUNDS = 2
 
 // The file connection of a firewalled downloader (any phone behind NAT) opens about 41 s after the request.
 private const val RACE_MS = 60_000L
+private const val MAX_RELEASES_TRIED = 6
 
 data class CatalogState(
     val albums: List<Album> = emptyList(),
@@ -79,25 +82,44 @@ class CatalogController(
         val saved = settings.library().firstOrNull { it.album.id == album.id }
         // Older versions saved releases that do not hold the album; such a one is searched for again.
         val kept = runCatching { saved?.let { torrentAlbum(stream.engine.handle(it.hash), album.title) } }
-        val opened = kept.getOrNull() ?: torrentAlbum(source.open(findRelease(album), stream.engine), album.title)
+        val opened = kept.getOrNull() ?: torrentAlbum(openRelease(album), album.title)
         settings.addToLibrary(SavedAlbum(album, checkNotNull(opened.hash)))
         mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
         return opened
     }
 
-    // A release of the album itself, else a discography found by the artist alone;
-    // a failed first search still tries the second, which reports the error.
-    private fun findRelease(album: Album): SearchResult {
-        val exact = runCatching { source.search("${album.artist} ${album.title}") }
-        return pickTorrent(album, exact.getOrDefault(emptyList()))
-            ?: pickTorrent(
-                album,
-                runCatching { source.search(album.artist) }.getOrElse {
-                    throw IOException("Альбом «${album.title}» не найден. ${it.message}", it)
-                },
-            )
-            ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
+    // Tries the releases found for the album, then those found by the artist alone, until one holds the album:
+    // the artist's most seeded release is often another album. The second search runs only if the first gave none.
+    private fun openRelease(album: Album): TorrentHandle {
+        val exact = runCatching { source.search("${album.artist} ${album.title}") }.getOrDefault(emptyList())
+        val wide by lazy { runCatching { source.search(album.artist) } }
+        val picks =
+            sequence {
+                yieldAll(rankTorrents(album, exact))
+                yieldAll(rankTorrents(album, wide.getOrDefault(emptyList()) - exact.toSet()))
+            }
+        val opened =
+            picks.take(MAX_RELEASES_TRIED).firstNotNullOfOrNull { pick -> lookInto(album, pick) }
+        val answers = wide.exceptionOrNull()?.let { " ${it.message}" }.orEmpty()
+        return opened ?: throw IOException("Альбом «${album.title}» не найден на трекерах (${source.name}).$answers")
     }
+
+    // The handle of [pick] if it holds the album, else null: a release that fails to open is one more miss.
+    private fun lookInto(
+        album: Album,
+        pick: SearchResult,
+    ): TorrentHandle? =
+        runCatching {
+            // A release named after the album opens the usual way; the rest are only looked into,
+            // and their .torrent answers at once where a magnet can take its whole wait.
+            val handle =
+                if (namesAlbum(album, pick)) {
+                    source.open(pick, stream.engine)
+                } else {
+                    stream.engine.openTorrent(source.torrentFile(pick))
+                }
+            handle.also { listAudio(it, album.title) }
+        }.getOrNull()
 
     /**
      * Races the first track of the best few Soulseek users that have [album] in a folder of its own; the winner
