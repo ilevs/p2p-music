@@ -322,6 +322,9 @@ done || {
   fail "The releases tab lists no Soulseek folder"
 }
 metric soulseek_releases_search_s "$searched"
+# A tap while the list still flings from the scroll only stops it: tap again once it settles, if still there.
+sleep 2
+python3 "$here/tap.py" "Soulseek · " > /dev/null || true
 tapped=$(date +%s)
 playing=
 for _ in $(seq 180); do
