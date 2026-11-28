@@ -61,14 +61,22 @@ class CatalogController(
                 val exact = runCatching { source.search("${album.artist} ${album.title}") }
                 val pick =
                     pickTorrent(album, exact.getOrDefault(emptyList()))
-                        ?: pickTorrent(album, source.search(album.artist))
+                        ?: pickTorrent(
+                            album,
+                            runCatching { source.search(album.artist) }.getOrElse {
+                                throw IOException("Альбом «${album.title}» не найден. ${it.message}", it)
+                            },
+                        )
                         ?: throw IOException("На ${source.name} нет раздач с сидами для «${album.title}»")
-                stream.openHandle(album.title, album.coverUrl) {
-                    source.open(pick, stream.engine).also { handle ->
-                        settings.addToLibrary(SavedAlbum(album, handle.infoHash().toHex()))
+                stream.openHandle(
+                    album.title,
+                    album.coverUrl,
+                    // Saved only once the torrent proved to hold the album: the artist search can pick one without it.
+                    onOpened = { hash ->
+                        settings.addToLibrary(SavedAlbum(album, hash))
                         mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
-                    }
-                }
+                    },
+                ) { source.open(pick, stream.engine) }
             }
             null
         }

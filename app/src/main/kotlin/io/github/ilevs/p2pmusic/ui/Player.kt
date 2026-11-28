@@ -40,6 +40,7 @@ internal data class Playback(
     val durationMs: Long = 0L,
     val isPlaying: Boolean = false,
     val hasTrack: Boolean = false,
+    val isBuffering: Boolean = false,
 ) {
     val fraction: Float
         get() = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
@@ -60,6 +61,7 @@ internal fun playbackState(player: Player): State<Playback> =
                     durationMs = player.duration.coerceAtLeast(0L),
                     isPlaying = player.isPlaying,
                     hasTrack = player.currentMediaItem != null,
+                    isBuffering = player.playbackState == Player.STATE_BUFFERING,
                 )
             delay(TICK_MS)
         }

@@ -18,13 +18,19 @@ internal fun pickTorrent(
         .maxWithOrNull(compareBy<SearchResult>({ title in normalize(it.title) }, { it.seeds }))
 }
 
-/** The files of [album] inside a torrent that may be a whole discography; all of them if no folder matches. */
+/**
+ * The files of [album] inside the torrent named [torrent], which may be a whole discography. When no folder
+ * names the album, all files if the torrent itself does, else none: another album must not play in its place.
+ */
 internal fun albumFiles(
     album: String,
+    torrent: String,
     files: List<AudioFile>,
 ): List<AudioFile> {
     val title = normalize(album)
-    return files.filter { title in normalize(it.name) }.ifEmpty { files }
+    return files.filter { title in normalize(it.name) }.ifEmpty {
+        if (title in normalize(torrent)) files else emptyList()
+    }
 }
 
 private val NonWord = Regex("[^\\p{L}\\p{N}]+")

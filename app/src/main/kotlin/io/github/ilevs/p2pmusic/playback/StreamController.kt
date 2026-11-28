@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.TorrentHandle
+import java.io.IOException
 
 private const val STATS_INTERVAL_MS = 1_000L
 private const val SAVE_INTERVAL_MS = 5_000L
@@ -41,7 +42,10 @@ data class AudioFile(
     val index: Int,
     val name: String,
     val size: Long,
-)
+) {
+    /** The file's name without its folders and extension. */
+    val title: String get() = name.substringAfterLast('/').substringBeforeLast('.')
+}
 
 data class StreamState(
     val torrentName: String? = null,
@@ -86,7 +90,7 @@ class StreamController(
                     if (playbackState == Player.STATE_READY) onReady()
                 }
 
-                override fun onPlayerError(error: PlaybackException) = onError()
+                override fun onPlayerError(error: PlaybackException) = onError(error)
             },
         )
         // The car can lose power at any moment, so the spot to resume from is saved while playing.
@@ -116,18 +120,19 @@ class StreamController(
 
     /**
      * Opens the torrent that [open] returns off the main thread.
-     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it.
+     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it;
+     * a torrent without the album is an error, and [onOpened] runs only for a torrent that has it.
      */
     fun openHandle(
         album: String? = null,
         coverUrl: String? = null,
+        onOpened: (hash: String) -> Unit = {},
         open: () -> TorrentHandle,
     ) {
         mutableState.update { StreamState(isLoading = true) }
         scope.launch {
-            runCatching { withContext(io) { listAudio(open()) } }
-                .onSuccess { (name, all) ->
-                    val files = album?.let { albumFiles(it, all) } ?: all
+            runCatching { withContext(io) { listAudio(open(), album).also { hash?.let(onOpened) } } }
+                .onSuccess { (name, files) ->
                     mutableState.update {
                         it.copy(torrentName = name, files = files, isLoading = false, coverUrl = coverUrl)
                     }
@@ -152,7 +157,7 @@ class StreamController(
                 .setMediaMetadata(
                     MediaMetadata
                         .Builder()
-                        .setTitle(it.name.substringAfterLast('/').substringBeforeLast('.'))
+                        .setTitle(it.title)
                         .setAlbumTitle(current.torrentName)
                         // The notification and the car show it too.
                         .setArtworkUri(current.coverUrl?.let(Uri::parse))
@@ -169,7 +174,7 @@ class StreamController(
         val files = state.value.files
         startClock = SystemClock.elapsedRealtime()
         seekClock = 0L
-        mutableState.update { it.copy(startupMs = null) }
+        mutableState.update { it.copy(startupMs = null, error = null) }
         player.setMediaItems(items, files.indexOf(file), 0L)
         player.prepare()
         player.play()
@@ -183,11 +188,15 @@ class StreamController(
     // shortcut: one retry per track, because libtorrent reports a piece as verified while its blocks still wait
     // in the write queue, and the file then reads as zeros ("no extractor could read the stream"); read through
     // libtorrent's read_piece if errors show up in the middle of tracks.
-    internal fun onError() {
+    internal fun onError(error: PlaybackException) {
         val track = player.currentMediaItem?.mediaId
         if (track != null && track != retriedTrack) {
             retriedTrack = track
             player.prepare()
+        } else {
+            // Without this the player just sits at 0:00 with no reason on screen.
+            val reason = error.cause?.message ?: error.errorCodeName
+            mutableState.update { it.copy(error = "Трек не играет: $reason") }
         }
     }
 
@@ -210,8 +219,10 @@ class StreamController(
     @OptIn(UnstableApi::class) // MediaItemsWithStartPosition, the only way to resume at a position
     suspend fun restore(saved: SavedAlbum? = null): MediaSession.MediaItemsWithStartPosition? {
         val spot = saved?.let { LastPlayed(it.hash, -1, 0L) } ?: settings.lastPlayed() ?: return null
-        val (name, all) = withContext(io) { listAudio(engine.handle(spot.hash)) }
-        val files = saved?.let { albumFiles(it.album.title, all) } ?: all
+        // A torrent saved for an album it does not hold (a discography picked by older versions) is not resumed.
+        val (name, files) =
+            runCatching { withContext(io) { listAudio(engine.handle(spot.hash), saved?.album?.title) } }.getOrNull()
+                ?: return null
         mutableState.update { StreamState(torrentName = name, files = files, coverUrl = saved?.album?.coverUrl) }
         watchStats()
         val index = if (saved != null) 0 else files.indexOfFirst { it.index == spot.fileIndex }
@@ -224,7 +235,11 @@ class StreamController(
         }
     }
 
-    private fun listAudio(handle: TorrentHandle): Pair<String, List<AudioFile>> {
+    // With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.
+    private fun listAudio(
+        handle: TorrentHandle,
+        album: String? = null,
+    ): Pair<String, List<AudioFile>> {
         hash = handle.infoHash().toHex()
         val info = handle.torrentFile()
         val storage = info.files()
@@ -233,7 +248,10 @@ class StreamController(
                 .filter { isAudioFile(storage.fileName(it)) }
                 .map { AudioFile(it, storage.filePath(it), storage.fileSize(it)) }
                 .sortedBy { it.name }
-        return info.name() to files
+        val name = info.name()
+        val ofAlbum = if (album == null) files else albumFiles(album, name, files)
+        if (album != null && ofAlbum.isEmpty()) throw IOException("В раздаче «$name» нет альбома «$album»")
+        return name to ofAlbum
     }
 
     private fun watchStats() {
