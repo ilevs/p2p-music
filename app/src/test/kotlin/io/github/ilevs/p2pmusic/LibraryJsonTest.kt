@@ -18,7 +18,7 @@ class LibraryJsonTest {
 
     @Test
     fun exportEntriesKeepExtraFields() {
-        val saved = SavedAlbum(Album("1", "A", "B", "2000"), "c".repeat(HASH_LENGTH))
+        val saved = SavedAlbum(Album("deezer:1", "A", "B", "2000", "https://e/c.jpg"), "c".repeat(HASH_LENGTH))
         assertEquals(saved, saved.toJson().put("torrent", "ZDE6YWU=").toSavedAlbum())
     }
 
