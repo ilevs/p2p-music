@@ -39,6 +39,7 @@ import io.github.ilevs.p2pmusic.search.SearchController
 import io.github.ilevs.p2pmusic.search.SearchResult
 
 private const val BYTES_PER_MB = 1_048_576f
+private const val MESSAGE_LINES = 3
 
 /** Albums from the catalog (the app picks the release), or raw releases from the tracker. */
 @Composable
@@ -95,7 +96,15 @@ fun SearchScreen(
             )
         }
         if (isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        message?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
+        // A few lines at most: on a head unit's small screen long tracker errors left no room for the results.
+        message?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = MESSAGE_LINES,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         val showLibrary = showAlbums && catalogState.albums.isEmpty() && catalogState.library.isNotEmpty()
         if (showLibrary) Text(text = stringResource(R.string.library), style = MaterialTheme.typography.titleMedium)
         SearchResults(

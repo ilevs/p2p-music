@@ -58,7 +58,8 @@ class SearchController(
             if (found.isEmpty()) {
                 val trackers = torrents.exceptionOrNull()?.message ?: "${source.name}: ничего не найдено"
                 val (results, answer) = searchSoulseek(query)
-                results to "$trackers; $SOULSEEK: $answer"
+                // Soulseek first: a long tracker error is cut off on a small screen.
+                results to "$SOULSEEK: $answer. $trackers"
             } else {
                 found to null
             }
