@@ -30,6 +30,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Base64
+import java.util.logging.Logger
 
 // The first track of this many Soulseek users is requested at once; the first to send wins.
 private const val RACE_SIZE = 5
@@ -38,6 +39,10 @@ private const val RACE_ROUNDS = 2
 // The file connection of a firewalled downloader (any phone behind NAT) opens about 41 s after the request.
 private const val RACE_MS = 60_000L
 private const val MAX_RELEASES_TRIED = 6
+private const val NANOS_IN_MS = 1_000_000
+
+// Shows in logcat under the tag "p2pmusic": which release was opened and how long each try took.
+private val log = Logger.getLogger("p2pmusic")
 
 data class CatalogState(
     val albums: List<Album> = emptyList(),
@@ -91,7 +96,10 @@ class CatalogController(
     // Tries the releases found for the album, then those found by the artist alone, until one holds the album:
     // the artist's most seeded release is often another album. The second search runs only if the first gave none.
     private fun openRelease(album: Album): TorrentHandle {
+        val searched = System.nanoTime()
         val exact = runCatching { source.search("${album.artist} ${album.title}") }.getOrDefault(emptyList())
+        val searchMs = (System.nanoTime() - searched) / NANOS_IN_MS
+        log.info { "search «${album.artist} ${album.title}»: ${exact.size} found in $searchMs ms" }
         val wide by lazy { runCatching { source.search(album.artist) } }
         val picks =
             sequence {
@@ -108,18 +116,24 @@ class CatalogController(
     private fun lookInto(
         album: Album,
         pick: SearchResult,
-    ): TorrentHandle? =
-        runCatching {
-            // A release named after the album opens the usual way; the rest are only looked into,
-            // and their .torrent answers at once where a magnet can take its whole wait.
-            val handle =
-                if (namesAlbum(album, pick)) {
-                    source.open(pick, stream.engine)
-                } else {
-                    stream.engine.openTorrent(source.torrentFile(pick))
-                }
-            handle.also { listAudio(it, album.title) }
-        }.getOrNull()
+    ): TorrentHandle? {
+        val started = System.nanoTime()
+        val opened =
+            runCatching {
+                // A release named after the album opens the usual way; the rest are only looked into,
+                // and their .torrent answers at once where a magnet can take its whole wait.
+                val handle =
+                    if (namesAlbum(album, pick)) {
+                        source.open(pick, stream.engine)
+                    } else {
+                        stream.engine.openTorrent(source.torrentFile(pick))
+                    }
+                handle.also { listAudio(it, album.title) }
+            }
+        val ms = (System.nanoTime() - started) / NANOS_IN_MS
+        log.info { "open ${pick.source} «${pick.title}» (seeds ${pick.seeds}): $opened in $ms ms" }
+        return opened.getOrNull()
+    }
 
     /**
      * Races the first track of the best few Soulseek users that have [album] in a folder of its own; the winner
