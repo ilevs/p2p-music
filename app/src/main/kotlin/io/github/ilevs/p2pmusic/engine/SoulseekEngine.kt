@@ -171,6 +171,12 @@ class SoulseekEngine(
         return winner
     }
 
+    /** The first of [folders] whose user starts sending its first track within [waitMs], or null. */
+    fun raceFolders(
+        folders: List<List<SoulseekFile>>,
+        waitMs: Long,
+    ): List<SoulseekFile>? = race(folders.map { it[0] }, waitMs)?.let { winner -> folders.first { it[0] == winner } }
+
     /** Where [file] is, or will be when done; while downloading it is this name plus `.part`. */
     fun target(file: SoulseekFile): File = File(folderOf(file), file.name)
 
@@ -205,7 +211,7 @@ internal fun SoulseekEngine.awaitBytes(
             }
 
             System.currentTimeMillis() > deadline -> {
-                throw IOException(
+                throw SoulseekStalledException(
                     "Soulseek: ${file.user} не начал отдавать ${file.name}" + if (have == QUEUED) ", очередь" else "",
                 )
             }
@@ -213,3 +219,8 @@ internal fun SoulseekEngine.awaitBytes(
         Thread.sleep(POLL_MS)
     }
 }
+
+/** A user sent nothing in time; asking the same user again will not help. */
+class SoulseekStalledException(
+    message: String,
+) : IOException(message)

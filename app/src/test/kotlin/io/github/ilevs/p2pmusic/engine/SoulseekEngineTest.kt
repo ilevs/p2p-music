@@ -59,6 +59,25 @@ class SoulseekEngineTest {
         assertEquals(setOf("queued"), api.cancelled)
     }
 
+    @Test
+    fun aTappedFolderGoesToWhoeverSendsOrToNobody() {
+        val api = FakeApi()
+        val engine = SoulseekEngine(Files.createTempDirectory("soulseek").toFile()) { api }
+        val queued = listOf(SoulseekFile("queued", "a\\01.mp3", 100), SoulseekFile("queued", "a\\02.mp3", 100))
+        val sending = listOf(SoulseekFile("sending", "b\\01.mp3", 100), SoulseekFile("sending", "b\\02.mp3", 100))
+        api.states["sending"] = mutableListOf(QUEUED, 10)
+        assertEquals(sending, engine.raceFolders(listOf(queued, sending), 5_000))
+        assertNull(engine.raceFolders(listOf(queued), 300))
+    }
+
+    @Test(expected = SoulseekStalledException::class)
+    fun aUserWhoSendsNothingStopsTheWaitWithAnError() {
+        val engine = SoulseekEngine(Files.createTempDirectory("soulseek").toFile()) { FakeApi() }
+        val file = SoulseekFile("queued", "a\\01.mp3", 100)
+        engine.download(file)
+        engine.awaitBytes(file, 0, 300)
+    }
+
     /** Each user's download reports the next of its states on every poll, then stays at the last one. */
     private class FakeApi : SoulseekApi {
         val states = mutableMapOf<String, MutableList<Long>>()
