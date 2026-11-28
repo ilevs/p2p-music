@@ -121,8 +121,11 @@ echo "::endgroup::"
 echo "::group::Settings with the remote"
 dpad "Настройки" LEFT 4 || dpad "Настройки" DOWN 4 || fail "The settings tab cannot be reached by remote"
 key CENTER
-dpad "Логин" RIGHT 3 || dpad "Логин" DOWN 3 || fail "The settings fields cannot be reached by remote"
-dpad "Сохранить" DOWN 20 || fail "The save button cannot be reached by remote"
+# The tabs are a bar under the screen here: up enters the settings from their end, then climbs to the first field
+# past every other one, which must not catch the remote or pop the keyboard up.
+dpad "Сохранить" UP 10 || fail "The save button cannot be reached by remote"
+dpad "Логин" UP 20 || fail "The settings fields cannot be passed by remote"
+adb shell dumpsys input_method | grep -q "mInputShown=true" && fail "Passing the fields by remote opened the keyboard"
 adb exec-out screencap -p > screen-tv-settings.png
 playing || fail "The track stopped while moving around the settings"
 echo "::endgroup::"

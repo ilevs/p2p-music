@@ -2,7 +2,6 @@ package io.github.ilevs.p2pmusic.ui
 
 import android.content.res.Configuration
 import androidx.annotation.StringRes
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -21,14 +20,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -76,8 +71,6 @@ fun MainScreen(
             }
         },
     ) { padding ->
-        // Right from the rail enters the open tab; Compose's own search picked the next rail item.
-        val tabContent = remember { FocusRequester() }
         var content = Modifier.padding(padding)
         if (isWide) {
             NavigationRail(modifier = content) {
@@ -87,11 +80,10 @@ fun MainScreen(
                         onClick = { tab = item },
                         icon = { Icon(item.icon, contentDescription = null) },
                         label = { Text(stringResource(item.title)) },
-                        modifier = Modifier.focusProperties { right = tabContent },
                     )
                 }
             }
-            content = content.padding(start = RAIL_WIDTH).focusRequester(tabContent).focusGroup()
+            content = content.padding(start = RAIL_WIDTH)
         }
         // Each tab keeps its state while away: back from the player, the search shows the same query and tab.
         val saved = rememberSaveableStateHolder()
