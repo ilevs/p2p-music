@@ -136,55 +136,33 @@ class StreamController(
                     .toHex()
             }.getOrNull()
         watchStats()
-        openHandle { engine.openMagnet(magnet) }
+        openAlbum(null) { torrentAlbum(engine.openMagnet(magnet), null) }
     }
 
     /**
-     * Opens the torrent that [open] returns off the main thread.
-     * With an [album], keeps only that album's files (the torrent may be a discography) and plays it;
-     * a torrent without the album is an error, and [onOpened] runs only for a torrent that has it.
+     * Opens the album that [open] returns off the main thread (a torrent or Soulseek files) and lists its tracks.
+     * Nothing plays until a track is tapped: the track before plays on, and the first track's opening bytes
+     * come in meanwhile, so a tap on it sounds at once.
      */
-    fun openHandle(
-        album: String? = null,
-        coverUrl: String? = null,
-        onOpened: (hash: String) -> Unit = {},
-        open: () -> TorrentHandle,
-    ) = openAlbum(album != null, coverUrl) {
-        torrentAlbum(open(), album).also { onOpened(checkNotNull(it.hash)) }
-    }
-
-    /** Opens the album that [open] returns off the main thread: a torrent or Soulseek files; [autoplay] plays it. */
     fun openAlbum(
-        autoplay: Boolean,
         coverUrl: String?,
         open: () -> OpenedAlbum,
     ) {
-        // The track before plays on while this album opens (seconds for a torrent, a minute for Soulseek) and
-        // until its first track has its opening bytes; then the album replaces it, or a failure stops it.
-        val wasPlaying = player.isPlaying
         mutableState.update { StreamState(isLoading = true) }
         val mine = ++opens
         scope.launch {
-            val result =
-                runCatching {
-                    withContext(io) {
-                        open().also { if (autoplay && wasPlaying) prefetchFirstTrack(engine, it) { mine != opens } }
-                    }
-                }
+            val result = runCatching { withContext(io) { open() } }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
             result
-                .onSuccess { (opened, name, files) ->
-                    hash = opened
+                .onSuccess { album ->
+                    hash = album.hash
                     mutableState.update {
-                        it.copy(torrentName = name, files = files, isLoading = false, coverUrl = coverUrl)
+                        it.copy(torrentName = album.name, files = album.files, isLoading = false, coverUrl = coverUrl)
                     }
                     watchStats()
-                    if (autoplay) files.firstOrNull()?.let(::play)
+                    launch(io) { prefetchFirstTrack(engine, album) { mine != opens } }
                 }.onFailure { error ->
-                    // The album before must not stay in the player after the tapped one failed to open.
-                    player.stop()
-                    player.clearMediaItems()
                     mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
                 }
         }

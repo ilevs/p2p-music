@@ -60,11 +60,13 @@ class LibraryCallback(
         pageSize: Int,
         params: LibraryParams?,
     ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+        // Liked albums first; only played ones, since an item plays the release the album kept.
+        val liked = settings.liked().map { it.id }.toSet()
         val children =
             if (parentId ==
                 ROOT_ID
             ) {
-                stream.queueItems() + settings.library().map(::albumItem)
+                stream.queueItems() + settings.library().sortedByDescending { it.album.id in liked }.map(::albumItem)
             } else {
                 emptyList()
             }
