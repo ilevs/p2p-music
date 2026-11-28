@@ -55,6 +55,9 @@ class StoreCatalogsTest {
         val deezer = listOf(Album("deezer:5", "Чёрный альбом", "Кино", ""))
         assertEquals(listOf("1", "deezer:5", "2", "itunes:4"), mergeAlbums(listOf(mb, itunes, deezer)).map { it.id })
         assertEquals(emptyList<Album>(), mergeAlbums(emptyList()))
+        val undated = Album("deezer:6", "The Dark Side of the Moon", "Pink Floyd", "")
+        val dated = Album("7", "The Dark Side of the Moon", "Pink Floyd", "1973")
+        assertEquals(listOf(undated.copy(year = "1973")), mergeAlbums(listOf(listOf(undated), listOf(dated))))
     }
 
     private companion object {

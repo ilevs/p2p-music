@@ -47,12 +47,16 @@ class ITunes(
 
 /**
  * The albums of all catalogs in one list: the first of each, then the second of each, and so on, so one catalog's
- * tributes and compilations do not push another's album off the screen. An album that several have is shown once.
+ * tributes and compilations do not push another's album off the screen. An album that several have is shown once,
+ * where the first of them stands.
  */
 internal fun mergeAlbums(catalogs: List<List<Album>>): List<Album> =
     (0 until (catalogs.maxOfOrNull { it.size } ?: 0))
         .flatMap { i -> catalogs.mapNotNull { it.getOrNull(i) } }
-        .distinctBy { normalize(it.artist) + "|" + normalize(it.title) }
+        .groupBy { normalize(it.artist) + "|" + normalize(it.title) }
+        // Deezer gives no year; the user tells albums apart by it, so another catalog's year fills it in.
+        .values
+        .map { same -> same[0].copy(year = same.map { it.year }.firstOrNull(String::isNotEmpty).orEmpty()) }
 
 internal fun parseDeezerAlbums(json: String): List<Album> {
     val root = JSONObject(json)
