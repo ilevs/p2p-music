@@ -35,9 +35,13 @@ import kotlinx.coroutines.withContext
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.TorrentHandle
 import java.io.IOException
+import java.util.logging.Logger
 
 private const val STATS_INTERVAL_MS = 1_000L
 private const val SAVE_INTERVAL_MS = 5_000L
+
+// Logcat tag "p2pmusic": which album the player took, for the install check's scenario.
+private val log = Logger.getLogger("p2pmusic")
 
 data class AudioFile(
     val index: Int,
@@ -161,6 +165,7 @@ class StreamController(
             if (mine != opens) return@launch
             result
                 .onSuccess { (opened, name, files) ->
+                    log.info { "playing «$name»" }
                     hash = opened
                     mutableState.update {
                         it.copy(torrentName = name, files = files, isLoading = false, coverUrl = coverUrl)

@@ -98,7 +98,9 @@ class CatalogController(
      */
     fun play(album: Album) {
         stream.openAlbum(autoplay = true, album.coverUrl) {
-            runCatching { openTorrent(album) }.getOrElse { playFromSoulseek(album, it.message ?: it.toString()) }
+            runCatching { openTorrent(album) }
+                .getOrElse { playFromSoulseek(album, it.message ?: it.toString()) }
+                .also { log.info { "album «${album.title}»: «${it.name}»" } }
         }
     }
 

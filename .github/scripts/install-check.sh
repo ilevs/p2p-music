@@ -261,6 +261,13 @@ adb logcat -d -b crash | tail -40
 adb logcat -d | grep -iE "ExoPlayerImpl|PlaybackException|TorrentDataSource" | tail -20
 echo "Played a track."
 
+# ilia's listening scenario: album after album of several artists, quick hops, and going back to one heard before.
+echo "::group::Listening scenario"
+python3 "$here/scenario.py" | tee -a /dev/stderr | grep "^METRIC" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+[ "${PIPESTATUS[0]}" -eq 0 ] || fail "The listening scenario failed"
+adb shell pidof "$package" > /dev/null || fail "The app died in the listening scenario"
+echo "::endgroup::"
+
 # Soulseek, the fallback source: the tracker proxy points nowhere, so both trackers fail and the catalog album
 # must come from Soulseek, the way a user hears an album the trackers do not have. A new account per run and
 # emulator: the server drops a session when the same name logs in elsewhere, and a fixed name once stopped
