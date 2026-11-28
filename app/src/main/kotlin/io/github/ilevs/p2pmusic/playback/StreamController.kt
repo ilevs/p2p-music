@@ -238,8 +238,8 @@ class StreamController(
         val spot = saved?.let { LastPlayed(it.hash, -1, 0L) } ?: settings.lastPlayed() ?: return null
         // A torrent saved for an album it does not hold (a discography picked by older versions) is not resumed.
         val (name, files) =
-            runCatching { withContext(io) { listAudio(engine.handle(spot.hash), saved?.album?.title) } }.getOrNull()
-                ?: return null
+            runCatching { withContext(io) { listAudio(engine.handle(spot.hash), saved?.album?.title) } }
+                .getOrDefault(null to emptyList())
         hash = spot.hash
         mutableState.update { StreamState(torrentName = name, files = files, coverUrl = saved?.album?.coverUrl) }
         watchStats()
