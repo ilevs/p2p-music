@@ -35,6 +35,8 @@ class ITunes(
                 .newBuilder()
                 .addPathSegment("search")
                 .addQueryParameter("term", query)
+                // The default US store listed 6 of 17 albums of the coverage set, missing most Russian ones.
+                .addQueryParameter("country", "RU")
                 .addQueryParameter("media", "music")
                 .addQueryParameter("entity", "album")
                 .addQueryParameter("limit", PAGE_SIZE)
@@ -92,7 +94,7 @@ private val Edition = Regex("""(\s*(\([^()]*\)|\[[^\[\]]*]|\s-\s(EP|Single)))+$"
  */
 internal fun storeTitle(title: String): String = title.replace(Edition, "").ifEmpty { title }
 
-private fun getText(
+internal fun getText(
     client: OkHttpClient,
     url: HttpUrl,
     name: String,
