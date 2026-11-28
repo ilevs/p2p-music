@@ -64,6 +64,9 @@ class CatalogTest {
             rankTorrents(album, listOf(hit, discography, albumRelease, dead, other)),
         )
         assertEquals(emptyList<SearchResult>(), rankTorrents(album, listOf(dead, other)))
+        // A hi-res release streams slower, so it goes after the 16-bit one even with more seeds.
+        val hiRes = result("7", "Кино - Группа крови [24-bit Hi-Res] (1988) FLAC", seeds = 50)
+        assertEquals(listOf(albumRelease, hiRes), rankTorrents(album, listOf(hiRes, albumRelease)))
         // "ё" and "е" are the same letter to a tracker.
         val yo = Album("2", "Чёрный альбом", "Кино", "1990")
         assertTrue(namesAlbum(yo, result("6", "Кино - Черный альбом (1990)", seeds = 1)))

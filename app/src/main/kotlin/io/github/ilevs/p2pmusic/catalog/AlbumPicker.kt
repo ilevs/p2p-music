@@ -8,7 +8,8 @@ import io.github.ilevs.p2pmusic.search.SearchResult
 /**
  * The tracker releases that may hold [album], the likeliest first: each must name the artist and have seeds;
  * one that names the album comes before discographies and collections, those before the artist's other
- * releases (most of them other albums), and more seeds win inside each group.
+ * releases (most of them other albums); inside each group a hi-res release goes after the others, and then more
+ * seeds win.
  */
 internal fun rankTorrents(
     album: Album,
@@ -20,6 +21,7 @@ internal fun rankTorrents(
         .sortedWith(
             compareByDescending<SearchResult> { namesAlbum(album, it) }
                 .thenByDescending { Collection.containsMatchIn(it.title) }
+                .thenBy { HiRes.containsMatchIn(it.title) }
                 .thenByDescending { it.seeds },
         )
 }
@@ -83,6 +85,10 @@ private val Collection =
         "дискограф|discograph|сборник|collection|антолог|antholog|альбомы|albums|\\d{4}\\s*[-–]\\s*\\d{4}",
         RegexOption.IGNORE_CASE,
     )
+
+// 24-bit files take 3-6 times the bytes per second: on 2026-11-28 CI a 24-bit FLAC release streamed at 0.5 MB/s
+// stopped to load after 11 s, where the 16-bit release of the same album played on.
+private val HiRes = Regex("24[ -]?bit|hi-?res|24/\\d{2,3}|\\bdsd|sacd", RegexOption.IGNORE_CASE)
 
 // Trackers and the catalog spell "ё" both ways.
 internal fun normalize(text: String): String {

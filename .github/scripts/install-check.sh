@@ -258,16 +258,20 @@ PY
   python3 "$here/tap.py" "=$other" || fail "No release $other in the source menu"
   switched=$(date +%s)
   last_sound=$switched
+  replaced=
   for _ in $(seq 90); do
     sleep 1
     adb shell uiautomator dump /sdcard/ui.xml > /dev/null
     adb shell cat /sdcard/ui.xml > ui.xml
     grep -q 'text="Ошибка: ' ui.xml && break
     grep -q 'content-desc="Пауза"' ui.xml || continue
-    # The button names the new release only once it holds the album and its track replaced the one before.
-    if python3 -c 'import sys, xml.etree.ElementTree as ET; sys.exit(all(n.get("text") != "Источник: " + sys.argv[2] for n in ET.parse(sys.argv[1]).iter("node")))' ui.xml "$other"; then
-      playing=yes
-      break
+    # The button names the new release once it holds the album, and the loading line goes when its track replaced
+    # the one before: from then on "Пауза" is the new release's sound.
+    if ! grep -q 'text="Ищу пиров' ui.xml && python3 -c 'import sys, xml.etree.ElementTree as ET; sys.exit(all(n.get("text") != "Источник: " + sys.argv[2] for n in ET.parse(sys.argv[1]).iter("node")))' ui.xml "$other"; then
+      [ -n "$replaced" ] && { playing=yes; break; }
+      # The first sight of the new release can still show the old track's last frame: look once more.
+      replaced=yes
+      continue
     fi
     last_sound=$(date +%s)
   done
