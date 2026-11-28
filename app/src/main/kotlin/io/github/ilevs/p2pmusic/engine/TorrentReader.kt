@@ -99,3 +99,29 @@ class TorrentReader(
         }
     }
 }
+
+/**
+ * Fetches what a player reads first from [ref], the reader's window at its start and its tail, without selecting
+ * the file, so an album the user skipped past costs a few MB, not a download. True once they are on disk, false
+ * after [timeoutMs] or as soon as [stop] holds.
+ */
+fun prefetchStart(
+    engine: TorrentEngine,
+    ref: TorrentRef,
+    timeoutMs: Long,
+    stop: () -> Boolean,
+): Boolean {
+    val handle = engine.handle(ref.hash)
+    val info = handle.torrentFile()
+    val files = info.files()
+    val span = FileSpan(files.fileOffset(ref.fileIndex), files.fileSize(ref.fileIndex), info.pieceLength())
+    // One piece was not enough: a 24-bit FLAC needs more than one before the player starts (11 s of silence in CI).
+    val window = span.deadlineWindow(span.pieceAt(0)) + (span.lastPiece to 0)
+    val pieces = window.map { it.first }
+    val wasIdle = handle.status().isFinished
+    // A deadline raises a piece out of the "don't download" priority the torrent was added with.
+    window.filterNot { handle.havePiece(it.first) }.forEach { (piece, ms) -> handle.setPieceDeadline(piece, ms) }
+    // As in TorrentReader: trackers send no seeds to a torrent that announced itself complete.
+    if (wasIdle) handle.forceReannounce()
+    return engine.awaitUntil(timeoutMs) { stop() || pieces.all(handle::havePiece) } && !stop()
+}

@@ -46,6 +46,8 @@ fail() {
   adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession" | tail -60
   # The head of a playback error, which the tail above cuts off.
   adb logcat -d -s ExoPlayerImplInternal:E | grep -E -A3 "Playback error|Caused by" | grep -v "^--" | head -40
+  # What the app opened and prefetched, and how long each step took.
+  adb logcat -d -s p2pmusic:I | tail -30
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
   # The stats line (peers, trackers, DHT) is at the end of the track list, below every file.
   for _ in $(seq 30); do adb shell input swipe 160 500 160 100 100; done; sleep 1
@@ -200,15 +202,18 @@ for _ in $(seq 20); do
   python3 "$here/tap.py" "Pink Floyd · " && break
 done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
 switched=$(date +%s)
+# The first album plays on while the second opens: the silence is the time from its last sound to the second's.
+last_sound=$switched
 playing=
 for _ in $(seq 90); do
   sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
-    adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
+  adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' || continue
+  if adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
     playing=yes
     break
   fi
+  last_sound=$(date +%s)
 done
 if [ -z "$playing" ]; then
   adb exec-out screencap -p > screen-second-album.png
@@ -216,6 +221,9 @@ if [ -z "$playing" ]; then
   fail "The second album does not play after the first"
 fi
 metric album_switch_to_sound_s "$switched"
+metric album_switch_silence_s "$last_sound"
+# The first album used to stop at the tap, so the silence was the whole switch.
+[ $(($(date +%s) - last_sound)) -le 10 ] || fail "The first album went silent long before the second played"
 adb exec-out screencap -p > screen-second-album.png
 # Then an album that only NNM-Club had on 2026-11-28 (Rutor and Knaben find nothing), so the release comes
 # from the fallback source, by the magnet of its topic. A Latin name: "input text" types ASCII only.
@@ -248,6 +256,33 @@ adb exec-out screencap -p > screen-nnm-album.png
 echo "Texts with the NNM-Club album:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -40
 [ -n "$playing" ] || fail "The album that only NNM-Club has does not play"
 metric nnm_album_tap_to_sound_s "$tapped"
+# Then back to the album before, as a user who changed his mind: its release is already in the session and its
+# first pieces on disk, so it must play without opening anything again.
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
+adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for _ in $(seq 20); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Wish You Were Here"' || continue
+  python3 "$here/tap.py" "Pink Floyd · " && break
+done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
+returned=$(date +%s)
+playing=
+for _ in $(seq 60); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
+    adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
+    playing=yes
+    break
+  fi
+done
+[ -n "$playing" ] || fail "The album played before does not play again after another one"
+metric album_return_to_sound_s "$returned"
 # Which releases the three albums opened and how long each search and each try took.
 adb logcat -d -s p2pmusic:I | grep -E "search|open" | tail -30
 echo "::endgroup::"
