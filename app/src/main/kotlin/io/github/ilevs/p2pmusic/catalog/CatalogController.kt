@@ -231,7 +231,7 @@ class CatalogController(
 }
 
 // Outside the class, which is at detekt's function limit.
-private fun connectSoulseek(
+internal fun connectSoulseek(
     settings: SettingsStore,
     soulseek: SoulseekEngine,
     why: String,
