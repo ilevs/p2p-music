@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -85,7 +86,11 @@ fun MainScreen(
             }
             content = content.padding(start = RAIL_WIDTH)
         }
-        TabContent(tab = tab, graph = graph, onTabChange = { tab = it }, modifier = content)
+        // Each tab keeps its state while away: back from the player, the search shows the same query and tab.
+        val saved = rememberSaveableStateHolder()
+        saved.SaveableStateProvider(tab) {
+            TabContent(tab = tab, graph = graph, onTabChange = { tab = it }, modifier = content)
+        }
     }
 }
 
