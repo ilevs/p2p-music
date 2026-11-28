@@ -192,6 +192,9 @@ for _ in $(seq 20); do
   sleep 1
   # Any release group by the band: the catalog lists several named like the album, and the 1975 one
   # can be below a small screen.
+  # The rows of the first search stay until the answer comes: wait for a row titled as the second album.
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Wish You Were Here"' || continue
   python3 "$here/tap.py" "Pink Floyd · " && break
 done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
 switched=$(date +%s)
