@@ -145,6 +145,45 @@ adb logcat -c
 metric() {
   echo "METRIC $1=$(($(date +%s) - $2))" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 }
+# Waits up to $1 s for the tapped album's track list in the player; returns 1 on an error or the wait running out.
+await_tracks() {
+  for _ in $(seq "$1"); do
+    sleep 1
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml > ui.xml
+    grep -q 'content-desc="Трек 1\. ' ui.xml && return 0
+    grep -q 'text="Ошибка: ' ui.xml && return 1
+  done
+  return 1
+}
+# Nothing of the tapped album plays until one of its tracks is tapped. $1 says whether a track played before the
+# album tap ("playing") or not ("silent"); that one must play on while the album opens.
+check_no_autoplay() {
+  title="$(grep -o 'content-desc="Трек 1\. [^"]*"' ui.xml | head -1 | sed 's/^content-desc="Трек 1\. //; s/"$//')"
+  sleep 5
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml > ui.xml
+  # The playing title shows in the player above the list, so a title twice on screen is the one that plays.
+  [ "$(grep -oF "text=\"$title\"" ui.xml | wc -l)" -lt 2 ] || fail "The album started playing without a track tap"
+  if [ "$1" = playing ]; then
+    grep -q 'content-desc="Пауза"' ui.xml || fail "The album tap stopped the track that played"
+  else
+    grep -q 'content-desc="Пауза"' ui.xml && fail "Something plays before a track was tapped"
+  fi
+}
+# Taps the opened album's first track and waits up to $1 s until that track plays, setting $track_tapped.
+play_first_track() {
+  title="$(grep -o 'content-desc="Трек 1\. [^"]*"' ui.xml | head -1 | sed 's/^content-desc="Трек 1\. //; s/"$//')"
+  python3 "$here/tap.py" "Трек 1. " > /dev/null || return 1
+  track_tapped=$(date +%s)
+  for _ in $(seq "$1"); do
+    sleep 1
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml > ui.xml
+    grep -q 'content-desc="Пауза"' ui.xml && [ "$(grep -oF "text=\"$title\"" ui.xml | wc -l)" -ge 2 ] && return 0
+  done
+  return 1
+}
 launched=$(date +%s)
 adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
 for _ in $(seq 20); do
@@ -166,21 +205,18 @@ done || fail "The catalog shows no Pink Floyd album of 1973"
 metric search_to_albums_s "$searched"
 tapped=$(date +%s)
 playing=
-for _ in $(seq 90); do
-  sleep 1
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
-    playing=yes
-    break
-  fi
-done
-# Not "done || fail": a loop that runs out ends with the status of its last command, which is 0 here.
+if await_tracks 90; then
+  metric album_tap_to_tracks_s "$tapped"
+  check_no_autoplay silent
+  play_first_track 60 && playing=yes
+fi
 if [ -z "$playing" ]; then
   adb exec-out screencap -p > screen-album.png
   echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -60
   python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   fail "The album found in the catalog does not play"
 fi
+metric track_tap_to_sound_s "$track_tapped"
 metric album_tap_to_sound_s "$tapped"
 metric launch_to_sound_s "$launched"
 adb exec-out screencap -p > screen-album.png
@@ -203,28 +239,23 @@ for _ in $(seq 20); do
   python3 "$here/tap.py" "Pink Floyd · " || python3 "$here/tap.py" "=Pink Floyd" && break
 done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
 switched=$(date +%s)
-# The first album plays on while the second opens: the silence is the time from its last sound to the second's.
-last_sound=$switched
+# The first album plays on while the second opens and until a track of the second is tapped: the silence is
+# the time from that tap, which stops the first album, to the second's sound.
 playing=
-for _ in $(seq 90); do
-  sleep 1
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' || continue
-  if adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
-    playing=yes
-    break
-  fi
-  last_sound=$(date +%s)
-done
+if await_tracks 90; then
+  grep -qi 'content-desc="Трек 1\. [^"]*Shine On' ui.xml || fail "The second album lists other tracks first"
+  check_no_autoplay playing
+  play_first_track 60 && playing=yes
+fi
 if [ -z "$playing" ]; then
   adb exec-out screencap -p > screen-second-album.png
   echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -60
   fail "The second album does not play after the first"
 fi
 metric album_switch_to_sound_s "$switched"
-metric album_switch_silence_s "$last_sound"
-# The first album used to stop at the tap, so the silence was the whole switch.
-[ $(($(date +%s) - last_sound)) -le 10 ] || fail "The first album went silent long before the second played"
+metric album_switch_silence_s "$track_tapped"
+# The first album used to stop at the album tap, so the silence was the whole switch.
+[ $(($(date +%s) - track_tapped)) -le 10 ] || fail "The second album's track took over 10 s to sound after its tap"
 adb exec-out screencap -p > screen-second-album.png
 # Then an album that only NNM-Club had on 2026-11-28 (Rutor and Knaben find nothing), so the release comes
 # from the fallback source, by the magnet of its topic. A Latin name: "input text" types ASCII only.
@@ -243,16 +274,9 @@ for i in $(seq 40); do
 done || fail "The catalog shows no Little Big album for Antipositive"
 tapped=$(date +%s)
 playing=
-for _ in $(seq 120); do
-  sleep 1
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  # The pause button alone could still be the previous album's.
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
-    ! adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
-    playing=yes
-    break
-  fi
-done
+if await_tracks 120; then
+  play_first_track 60 && playing=yes
+fi
 adb exec-out screencap -p > screen-nnm-album.png
 echo "Texts with the NNM-Club album:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -40
 [ -n "$playing" ] || fail "The album that only NNM-Club has does not play"
@@ -273,15 +297,10 @@ for _ in $(seq 20); do
 done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
 returned=$(date +%s)
 playing=
-for _ in $(seq 60); do
-  sleep 1
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
-    adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
-    playing=yes
-    break
-  fi
-done
+if await_tracks 60; then
+  metric album_return_to_tracks_s "$returned"
+  play_first_track 60 && playing=yes
+fi
 [ -n "$playing" ] || fail "The album played before does not play again after another one"
 metric album_return_to_sound_s "$returned"
 # Which releases the three albums opened and how long each search and each try took.
@@ -343,15 +362,9 @@ for i in $(seq 20); do
 done || fail "The catalog shows no Pink Floyd album of 1973"
 tapped=$(date +%s)
 playing=
-for _ in $(seq 180); do
-  sleep 1
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
-    playing=yes
-    break
-  fi
-  python3 "$here/tap.py" "Плеер" > /dev/null || true
-done
+if await_tracks 180; then
+  play_first_track 60 && playing=yes
+fi
 # "Пауза" shows only while the player renders audio; the position must also move.
 if [ -n "$playing" ]; then
   metric soulseek_album_tap_to_sound_s "$tapped"
@@ -417,16 +430,9 @@ for attempt in 1 2 3 4; do
   sleep 2
   python3 "$here/tap.py" "$row" > /dev/null || true
   tapped=$(date +%s)
-  for _ in $(seq 150); do
-    sleep 1
-    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-    adb shell cat /sdcard/ui.xml > ui.xml
-    if grep -q 'content-desc="Пауза"' ui.xml; then
-      playing=yes
-      break
-    fi
-    grep -q 'text="Ошибка: ' ui.xml && break
-  done
+  if await_tracks 150; then
+    play_first_track 60 && playing=yes
+  fi
   [ -n "$playing" ] && break
   grep -oE 'text="Ошибка[^"]*"' ui.xml || true
   python3 "$here/tap.py" "Поиск" > /dev/null
