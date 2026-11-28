@@ -14,6 +14,12 @@ import java.nio.charset.Charset
 private val Cp1251: Charset = Charset.forName("windows-1251")
 private const val LOGGED_IN_MARKER = "logged-in-username"
 private const val CAPTCHA_MARKER = "cap_sid"
+private const val HTTP_FORBIDDEN = 403
+
+// The proxy works and the site is up, so "check the proxy" would send the user the wrong way.
+private const val CLOUDFLARE_CHECK =
+    "RuTracker: сайт закрыт проверкой Cloudflare «Я не робот» для адреса, с которого идёт запрос. " +
+        "Приложение её не проходит: нужен другой прокси или VPN"
 
 data class Credentials(
     val login: String,
@@ -90,6 +96,7 @@ class RuTracker(
                 CAPTCHA_MARKER in page -> "RuTracker просит капчу: войдите один раз через браузер"
                 !siteError.isNullOrBlank() -> "RuTracker: $siteError"
                 "login_username" in page -> "RuTracker не принял логин или пароль"
+                isCloudflareCheck(code, page) -> CLOUDFLARE_CHECK
                 else -> "Вместо RuTracker пришла страница «${html.title()}» (HTTP $code). Проверьте прокси"
             }
         if (error != null) throw TrackerLoginException(error)
@@ -99,10 +106,18 @@ class RuTracker(
 
     private fun getBytes(url: HttpUrl): ByteArray =
         client().newCall(Request.Builder().url(url).build()).execute().use { response ->
+            val bytes = checkNotNull(response.body).bytes()
+            if (isCloudflareCheck(response.code, String(bytes, Cp1251))) throw IOException(CLOUDFLARE_CHECK)
             if (!response.isSuccessful) throw IOException("RuTracker: HTTP ${response.code}")
-            checkNotNull(response.body).bytes()
+            bytes
         }
 }
+
+// Cloudflare's challenge page, which only a browser passes.
+internal fun isCloudflareCheck(
+    code: Int,
+    page: String,
+): Boolean = code == HTTP_FORBIDDEN && ("Just a moment" in page || "challenge-platform" in page)
 
 // A bencoded .torrent is a dictionary that starts with its "announce" or "info" key.
 internal fun isTorrentFile(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes[0] == 'd'.code.toByte()
