@@ -144,7 +144,7 @@ class StreamController(
         torrentAlbum(open(), album).also { onOpened(checkNotNull(it.hash)) }
     }
 
-    /** Opens the album that [open] returns off the main thread, a torrent or files from Soulseek; [autoplay] plays it. */
+    /** Opens the album that [open] returns off the main thread: a torrent or Soulseek files; [autoplay] plays it. */
     fun openAlbum(
         autoplay: Boolean,
         coverUrl: String?,
