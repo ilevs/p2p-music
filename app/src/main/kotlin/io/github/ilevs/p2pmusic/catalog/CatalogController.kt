@@ -99,14 +99,14 @@ class CatalogController(
     }
 
     /**
-     * Plays from the library when the album was played before (works offline), else from a new release.
-     * The search runs as part of the player's open, so the player drops the album before at once
-     * and shows this one loading, then playing or the reason it was not found.
+     * Opens from the library when the album was played before (works offline), else from a new release.
+     * The search runs as part of the player's open, so the player shows this album loading, then its tracks
+     * or the reason it was not found; the track before plays on until one of the new tracks is tapped.
      * Soulseek only when the trackers have no release that holds the album, or fail.
      */
-    fun play(album: Album) {
+    fun open(album: Album) {
         mutableState.update { it.copy(sourcesOf = null, sources = emptyList(), picked = null) }
-        stream.openAlbum(autoplay = true, album.coverUrl, album.id) {
+        stream.openAlbum(album.coverUrl, album.id) {
             runCatching { openTorrent(album) }.getOrElse { failure ->
                 val why = failure.message ?: failure.toString()
                 val opened = soulseekAlbum(stream.soulseek, settings.load(), album, why)
@@ -117,16 +117,16 @@ class CatalogController(
     }
 
     /**
-     * Plays the album [albumId] from [pick], one of its [CatalogState.sources], and keeps that release for it.
-     * The track playing goes on until the new source has the same track ready.
+     * Opens the album [albumId] from [pick], one of its [CatalogState.sources], and keeps that release for it.
+     * A track of the album playing now goes on until the new source has the same track ready, then plays from it.
      */
     fun playFrom(
         albumId: String,
         pick: SearchResult,
     ) {
         val album = album(albumId) ?: return
-        val track = if (stream.state.value.albumId == albumId) stream.player.currentMediaItemIndex else 0
-        stream.openAlbum(autoplay = true, album.coverUrl, album.id, track) {
+        val track = if (stream.state.value.albumId == albumId) stream.playingIndex() else null
+        stream.openAlbum(album.coverUrl, album.id, track) {
             val opened =
                 if (pick.source == SOULSEEK) {
                     soulseekAlbum(stream.soulseek, settings.load(), album, "Выбран источник $SOULSEEK")

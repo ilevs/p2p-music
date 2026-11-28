@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.ilevs.p2pmusic.R
@@ -82,12 +84,19 @@ private fun TrackList(
     LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         state.albumId?.let { album -> item { SourcePicker(catalog, album, state.torrentName) } }
         item { StatusText(state) }
-        items(state.files, key = { it.index }) { file ->
+        itemsIndexed(state.files, key = { _, file -> file.index }) { i, file ->
+            // The number tells a screen reader, and the install check, which track of the album this is.
+            val description = stringResource(R.string.track, i + 1, file.title)
             Text(
                 text = file.title,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().clickable { controller.play(file) }.padding(vertical = 12.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = description }
+                        .clickable { controller.play(file) }
+                        .padding(vertical = 12.dp),
             )
         }
     }
@@ -185,7 +194,7 @@ private fun PlayerPanel(
     if (!playback.hasTrack) return
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            state.coverUrl?.let { Cover(it, Modifier.padding(end = 12.dp).size(64.dp)) }
+            playback.coverUrl?.let { Cover(it, Modifier.padding(end = 12.dp).size(64.dp)) }
             Text(
                 text = playback.title,
                 style = MaterialTheme.typography.titleMedium,
