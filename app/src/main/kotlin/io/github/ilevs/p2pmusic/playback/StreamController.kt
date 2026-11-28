@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.TorrentHandle
+import org.libtorrent4j.TorrentStatus
 import java.io.IOException
 import java.util.logging.Logger
 
@@ -268,7 +269,10 @@ class StreamController(
                 while (isActive) {
                     val handle = withContext(io) { hash?.let(engine::find) }
                     if (handle != null) {
-                        val (status, trackers) = withContext(io) { handle.status() to trackerCounts(handle) }
+                        val (status, trackers) =
+                            withContext(io) {
+                                handle.status().also { restartIfErrored(handle, it) } to trackerCounts(handle)
+                            }
                         // A disk error pauses the torrent silently; without this the track just never starts.
                         val diskError = status.errorCode().takeIf { it.isError }?.message
                         mutableState.update {
@@ -287,6 +291,18 @@ class StreamController(
                 }
             }
     }
+}
+
+// shortcut: restarts an errored torrent at every stats tick. "End of file" stopped an NNM-Club album with 0 peers in
+// CI when a track was tapped while its first pieces were prefetched; find the libtorrent cause if it keeps coming back.
+// Not in the class: detekt caps its functions.
+internal fun restartIfErrored(
+    handle: TorrentHandle,
+    status: TorrentStatus,
+) {
+    val error = status.errorCode().takeIf { it.isError } ?: return
+    log.warning { "torrent error «${error.message}», restarting it" }
+    handle.clearError()
 }
 
 // Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds.
