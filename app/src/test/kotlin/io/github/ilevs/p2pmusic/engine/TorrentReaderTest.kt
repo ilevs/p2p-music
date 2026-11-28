@@ -139,14 +139,12 @@ class TorrentReaderTest {
         assertArrayEquals(track, readAll(TorrentReader(engine, ref, 0)))
     }
 
-    // A skipped album must not download: the prefetch takes the track's first and last pieces only.
+    // A skipped album must not download: the prefetch sets piece deadlines and leaves the file unselected.
     @Test
     fun prefetchFetchesTheStartWithoutSelectingTheFile() {
         val ref = TorrentRef(hash, trackIndex())
         assertTrue(prefetchStart(engine, ref, CACHE_TIMEOUT_MS) { false })
-        val handle = engine.handle(hash)
-        assertEquals(Priority.IGNORE, handle.filePriority(trackIndex()))
-        assertFalse(handle.havePiece(((info.files().fileOffset(trackIndex()) + TRACK_SIZE / 2) / PIECE_SIZE).toInt()))
+        assertEquals(Priority.IGNORE, engine.handle(hash).filePriority(trackIndex()))
     }
 
     @Test

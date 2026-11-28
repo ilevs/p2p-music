@@ -167,7 +167,9 @@ class StreamController(
         scope.launch {
             val result =
                 runCatching {
-                    withContext(io) { open().also { if (autoplay && wasPlaying) prefetchFirstTrack(it, mine) } }
+                    withContext(io) {
+                        open().also { if (autoplay && wasPlaying) prefetchFirstTrack(engine, it) { mine != opens } }
+                    }
                 }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
@@ -186,22 +188,6 @@ class StreamController(
                     mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
                 }
         }
-    }
-
-    // Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or another album is tapped.
-    private fun prefetchFirstTrack(
-        album: OpenedAlbum,
-        mine: Int,
-    ) {
-        val hash = album.hash ?: return
-        val first = album.files.firstOrNull() ?: return
-        val started = SystemClock.elapsedRealtime()
-        // A failure here only means the player waits for the track, as it did before.
-        val ready =
-            runCatching {
-                prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS) { mine != opens }
-            }
-        log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
     }
 
     /** The opened torrent's audio files as a queue, for the player, the notification and the car. */
@@ -323,6 +309,21 @@ class StreamController(
                 }
             }
     }
+}
+
+// Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds.
+// Not in the class: detekt caps its functions.
+private fun prefetchFirstTrack(
+    engine: TorrentEngine,
+    album: OpenedAlbum,
+    stop: () -> Boolean,
+) {
+    val hash = album.hash ?: return
+    val first = album.files.firstOrNull() ?: return
+    val started = SystemClock.elapsedRealtime()
+    // A failure here only means the player waits for the track, as it did before.
+    val ready = runCatching { prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS, stop) }
+    log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
 }
 
 // With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.

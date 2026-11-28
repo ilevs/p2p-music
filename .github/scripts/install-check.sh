@@ -46,6 +46,8 @@ fail() {
   adb logcat -d | grep -E "AndroidRuntime|$package|libtorrent|ExoPlayer|MediaSession" | tail -60
   # The head of a playback error, which the tail above cuts off.
   adb logcat -d -s ExoPlayerImplInternal:E | grep -E -A3 "Playback error|Caused by" | grep -v "^--" | head -40
+  # What the app opened and prefetched, and how long each step took.
+  adb logcat -d -s p2pmusic:I | tail -30
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
   # The stats line (peers, trackers, DHT) is at the end of the track list, below every file.
   for _ in $(seq 30); do adb shell input swipe 160 500 160 100 100; done; sleep 1
