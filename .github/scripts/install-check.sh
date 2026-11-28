@@ -260,11 +260,12 @@ adb logcat -d | grep -iE "ExoPlayerImpl|PlaybackException|TorrentDataSource" | t
 echo "Played a track."
 
 # Soulseek, the fallback source: the tracker proxy points nowhere, so both trackers fail and the catalog album
-# must come from Soulseek, the way a user hears an album the trackers do not have. One fixed account per
-# emulator: the server drops a session when the same name logs in elsewhere.
+# must come from Soulseek, the way a user hears an album the trackers do not have. A new account per run and
+# emulator: the server drops a session when the same name logs in elsewhere, and a fixed name once stopped
+# accepting its password (API 37.0 on 2026-11-28). The server registers an unknown name on its first login.
 echo "::group::Play a catalog album from Soulseek"
 page="$(adb shell getconf PAGE_SIZE 2>/dev/null | tr -d '\r')"
-user="p2pmusic-ci-$(adb shell getprop ro.build.version.sdk | tr -d '\r')-${page:-4096}"
+user="p2pm-${GITHUB_RUN_ID:-$(date +%s)}-${GITHUB_RUN_ATTEMPT:-1}-$(adb shell getprop ro.build.version.sdk | tr -d '\r')-${page:-4096}"
 # Taps the element with text $1 (the $2-th, from 0), scrolling down until it shows.
 tap_scrolling() {
   for _ in 1 2 3 4 5; do
