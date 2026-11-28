@@ -24,7 +24,7 @@ internal fun Modifier.remoteKeys(
             when (event.key) {
                 Key.DirectionDown -> focus.moveFocus(FocusDirection.Down)
                 Key.DirectionUp -> focus.moveFocus(FocusDirection.Up)
-                Key.DirectionCenter -> keyboard?.run { show() } != null // consumed when there is a keyboard to show
+                Key.DirectionCenter -> keyboard?.run { show() } != null
                 else -> false
             }
     }
