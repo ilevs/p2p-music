@@ -7,6 +7,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.libtorrent4j.TorrentHandle
 import java.io.IOException
+import java.util.concurrent.CompletableFuture
 
 private const val MAGNET_FIRST_MS = 20_000L
 
@@ -102,15 +103,18 @@ class AllSources(
 }
 
 /**
- * Opens [result] by its magnet, which needs only peers; by the .torrent when the tracker shows no magnet
- * or the magnet finds no metadata in time. Blocking.
+ * Opens [result] by its magnet and by its .torrent at once, whichever has the metadata first: the magnet needs
+ * only peers, the .torrent only the tracker's site. One after the other cost the magnet's whole wait when no
+ * peer answered (2026-11-28 CI: 20.8 s against 0.6-2.5 s). Blocking.
  */
 fun TorrentSource.open(
     result: SearchResult,
     engine: TorrentEngine,
-): TorrentHandle =
-    runCatching { magnet(result) }
-        .getOrNull()
-        .takeUnless { it.isNullOrEmpty() }
-        ?.let { runCatching { engine.openMagnet(it, MAGNET_FIRST_MS) }.getOrNull() }
-        ?: engine.openTorrent(torrentFile(result))
+): TorrentHandle {
+    val magnet = runCatching { magnet(result) }.getOrNull()
+    if (magnet.isNullOrEmpty()) return engine.openTorrent(torrentFile(result))
+    // Not a coroutine: its scope would wait for a slow download of the .torrent after the magnet has won.
+    val byFile = CompletableFuture.supplyAsync { runCatching { engine.openTorrent(torrentFile(result)) } }
+    // Both are one torrent in the session, so this wait also ends when the .torrent brings the metadata.
+    return runCatching { engine.openMagnet(magnet, MAGNET_FIRST_MS) }.getOrNull() ?: byFile.get().getOrThrow()
+}
