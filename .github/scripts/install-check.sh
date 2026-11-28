@@ -166,7 +166,8 @@ check_no_autoplay() {
   # The playing title shows in the player above the list, so a title twice on screen is the one that plays.
   [ "$(grep -oF "text=\"$title\"" ui.xml | wc -l)" -lt 2 ] || fail "The album started playing without a track tap"
   if [ "$1" = playing ]; then
-    grep -q 'content-desc="Пауза"' ui.xml || fail "The album tap stopped the track that played"
+    # A slow swarm can stall that track ("Загружаю трек…"); stalled is still playing, stopped is not.
+    grep -qE 'content-desc="Пауза"|text="Загружаю трек' ui.xml || fail "The album tap stopped the track that played"
   else
     grep -q 'content-desc="Пауза"' ui.xml && fail "Something plays before a track was tapped"
   fi
