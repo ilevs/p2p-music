@@ -11,6 +11,7 @@
   <string name="next">Next track</string>
   <string name="play">Play</string>
   <string name="pause">Pause</string>
+  <string name="track">Track %1$d. %2$s</string>
   <string name="buffering">Loading the track… Peers: %1$d · %2$s</string>
   <string name="position" translatable="false">%1$s / %2$s</string>
   <string name="stats">Start: %1$s · Seek: %2$s · Peers: %3$d · Speed: %4$s · Trackers: %5$d of %6$d · DHT: %7$d</string>

@@ -30,7 +30,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.ilevs.p2pmusic.AppGraph
 import io.github.ilevs.p2pmusic.R
-import io.github.ilevs.p2pmusic.search.SOULSEEK
 
 private val RAIL_WIDTH = 80.dp
 
@@ -107,11 +106,11 @@ private fun TabContent(
                 catalog = graph.catalog,
                 controller = graph.search,
                 onAlbum = { album ->
-                    graph.catalog.play(album)
+                    graph.catalog.open(album)
                     onTabChange(Tab.Player)
                 },
                 onOpen = { result ->
-                    graph.stream.openAlbum(result.source == SOULSEEK, null) { graph.search.open(result, graph.engine) }
+                    graph.stream.openAlbum(null) { graph.search.open(result, graph.engine) }
                     onTabChange(Tab.Player)
                 },
                 modifier = modifier,
