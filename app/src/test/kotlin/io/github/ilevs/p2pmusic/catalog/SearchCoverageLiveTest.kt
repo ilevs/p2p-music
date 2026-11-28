@@ -50,7 +50,8 @@ class SearchCoverageLiveTest {
         results: List<SearchResult>,
     ) = rankTorrents(album, results).any { namesAlbum(album, it) }
 
-    private fun label(source: TorrentSource) = if (source is AllSources) "all" else source.name.lowercase().replace('-', '_')
+    private fun label(source: TorrentSource) =
+        if (source is AllSources) "all" else source.name.lowercase().replace('-', '_')
 
     private companion object {
         // Russian and Western, popular and niche; the set of the 2026-11-28 source research.
