@@ -325,14 +325,10 @@ adb exec-out screencap -p > screen-liked.png
 python3 "$here/tap.py" "=Wish You Were Here" || fail "No liked album row"
 tapped=$(date +%s)
 playing=
-for _ in $(seq 60); do
-  sleep 1
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
-    playing=yes
-    break
-  fi
-done
+if await_tracks 60; then
+  metric liked_album_tap_to_tracks_s "$tapped"
+  play_first_track 60 && playing=yes
+fi
 [ -n "$playing" ] || fail "The liked album does not play after a restart"
 metric liked_album_tap_to_sound_s "$tapped"
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
