@@ -188,8 +188,8 @@ adb exec-out screencap -p > screen-album.png
 # every album of an artist opened the same release on 2026-11-28. "Shine On You Crazy Diamond" opens the second.
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
-adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 for _ in $(seq 20); do
@@ -199,7 +199,8 @@ for _ in $(seq 20); do
   # The rows of the first search stay until the answer comes: wait for a row titled as the second album.
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   adb shell cat /sdcard/ui.xml | grep -q 'text="Wish You Were Here"' || continue
-  python3 "$here/tap.py" "Pink Floyd · " && break
+  # Deezer and iTunes rows carry no year, so the band's row can read just "Pink Floyd".
+  python3 "$here/tap.py" "Pink Floyd · " || python3 "$here/tap.py" "=Pink Floyd" && break
 done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
 switched=$(date +%s)
 # The first album plays on while the second opens: the silence is the time from its last sound to the second's.
@@ -229,8 +230,8 @@ adb exec-out screencap -p > screen-second-album.png
 # from the fallback source, by the magnet of its topic. A Latin name: "input text" types ASCII only.
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
-adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Little%sBig%sAntipositive"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 for i in $(seq 40); do
@@ -260,8 +261,8 @@ metric nnm_album_tap_to_sound_s "$tapped"
 # first pieces on disk, so it must play without opening anything again.
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
-adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 for _ in $(seq 20); do
@@ -377,33 +378,61 @@ python3 "$here/tap.py" "Пауза" > /dev/null
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Раздачи" || fail "No releases tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-adb shell input keyevent KEYCODE_MOVE_END
-adb shell input keyevent $(for _ in $(seq 60); do printf '67 112 '; done)
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 searched=$(date +%s)
 for _ in $(seq 30); do
   sleep 2
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Soulseek · ' && break
   # The trackers' errors above the list can push it below a small screen.
-  tap_scrolling "Soulseek · " && break
-done || {
+  adb shell input swipe 160 500 160 150 300
+done
+adb shell cat /sdcard/ui.xml | grep -q 'text="Soulseek · ' || {
   adb shell cat /sdcard/ui.xml | grep -oE 'text="[^"]+"' | head -30
   fail "The releases tab lists no Soulseek folder"
 }
 metric soulseek_releases_search_s "$searched"
-# A tap while the list still flings from the scroll only stops it: tap again once it settles, if still there.
-sleep 2
-python3 "$here/tap.py" "Soulseek · " > /dev/null || true
-tapped=$(date +%s)
+# A folder's users can all be busy, and then the app says so and asks for another, as it should; the check does
+# what a user would and taps the next folder, so only an app that plays none of them fails.
+tried=
 playing=
-for _ in $(seq 180); do
-  sleep 1
-  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
-    playing=yes
-    break
-  fi
+for attempt in 1 2 3 4; do
+  row=
+  for _ in 1 2 3 4 5; do
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    row="$(adb shell cat /sdcard/ui.xml | grep -oE 'text="Soulseek · [^"]+"' | sed 's/^text="//; s/"$//' \
+      | grep -vxF -e "${tried:-none}" | head -1 || true)"
+    [ -n "$row" ] && break
+    adb shell input swipe 160 500 160 150 300
+    sleep 2
+  done
+  [ -n "$row" ] || break
+  tried="$tried$row"$'\n'
+  echo "Attempt $attempt: $row"
+  python3 "$here/tap.py" "$row" > /dev/null
+  # A tap while the list still flings from the scroll only stops it: tap again once it settles, if still there.
+  sleep 2
+  python3 "$here/tap.py" "$row" > /dev/null || true
+  tapped=$(date +%s)
+  for _ in $(seq 150); do
+    sleep 1
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml > ui.xml
+    if grep -q 'content-desc="Пауза"' ui.xml; then
+      playing=yes
+      break
+    fi
+    grep -q 'text="Ошибка: ' ui.xml && break
+  done
+  [ -n "$playing" ] && break
+  grep -oE 'text="Ошибка[^"]*"' ui.xml || true
+  python3 "$here/tap.py" "Поиск" > /dev/null
+  sleep 2
 done
+echo "METRIC soulseek_folder_attempts=$attempt" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 if [ -n "$playing" ]; then
   metric soulseek_folder_tap_to_sound_s "$tapped"
   sleep 6
