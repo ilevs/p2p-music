@@ -45,9 +45,6 @@ private const val PREFETCH_MS = 30_000L
 // Shows in logcat under the tag "p2pmusic", as the catalog's release tries do.
 private val log = Logger.getLogger("p2pmusic")
 
-// Logcat tag "p2pmusic": which album the player took, for the install check's scenario.
-private val log = Logger.getLogger("p2pmusic")
-
 data class AudioFile(
     val index: Int,
     val name: String,
