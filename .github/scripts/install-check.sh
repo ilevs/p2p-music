@@ -308,7 +308,8 @@ for _ in $(seq 20); do
   sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   adb shell cat /sdcard/ui.xml | grep -q 'text="Wish You Were Here"' || continue
-  python3 "$here/tap.py" "Pink Floyd · " && break
+  # Deezer and iTunes rows carry no year, as in the switch above.
+  python3 "$here/tap.py" "Pink Floyd · " || python3 "$here/tap.py" "=Pink Floyd" && break
 done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
 returned=$(date +%s)
 playing=
