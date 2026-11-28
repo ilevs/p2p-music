@@ -188,8 +188,8 @@ adb exec-out screencap -p > screen-album.png
 # every album of an artist opened the same release on 2026-11-28. "Shine On You Crazy Diamond" opens the second.
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
-adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 for _ in $(seq 20); do
@@ -230,8 +230,8 @@ adb exec-out screencap -p > screen-second-album.png
 # from the fallback source, by the magnet of its topic. A Latin name: "input text" types ASCII only.
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
-adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Little%sBig%sAntipositive"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 for i in $(seq 40); do
@@ -261,8 +261,8 @@ metric nnm_album_tap_to_sound_s "$tapped"
 # first pieces on disk, so it must play without opening anything again.
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
-adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 for _ in $(seq 20); do
@@ -378,8 +378,8 @@ python3 "$here/tap.py" "Пауза" > /dev/null
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Раздачи" || fail "No releases tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
-adb shell input keyevent KEYCODE_MOVE_END
-adb shell input keyevent $(for _ in $(seq 60); do printf '67 112 '; done)
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete back and forward (the field keeps its text)
+adb shell input keyevent 123 $(printf '67 112 %.0s' $(seq 60))
 adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 searched=$(date +%s)
