@@ -7,7 +7,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
@@ -49,15 +49,24 @@ class CatalogTest {
     }
 
     @Test
-    fun picksTheAlbumOverADiscographyAndSkipsDeadReleases() {
+    fun ranksTheAlbumThenDiscographiesThenTheRestAndSkipsDeadReleases() {
         val album = Album("1", "Группа крови", "Кино", "1988")
         val discography = result("1", "Кино - Дискография (1982-1990) MP3", seeds = 90)
         val albumRelease = result("2", "Кино - Группа крови - 1988 (FLAC)", seeds = 5)
         val dead = result("3", "Кино - Группа крови (remaster)", seeds = 0)
         val other = result("4", "Кинопленка - Группа крови", seeds = 50)
-        assertEquals(albumRelease, pickTorrent(album, listOf(discography, albumRelease, dead, other)))
-        assertEquals(discography, pickTorrent(album, listOf(discography, dead, other)))
-        assertNull(pickTorrent(album, listOf(dead, other)))
+        // The artist's most seeded release is another album: ilia got "Бутер Бродский 2" for
+        // "Трудно быть с Богом" on 2026-11-28. It is looked into last, never played as the album.
+        val hit = result("5", "Кино - 1989 - Звезда по имени Солнце [FLAC]", seeds = 900)
+        assertEquals(
+            listOf(albumRelease, discography, hit),
+            rankTorrents(album, listOf(hit, discography, albumRelease, dead, other)),
+        )
+        assertEquals(emptyList<SearchResult>(), rankTorrents(album, listOf(dead, other)))
+        // "ё" and "е" are the same letter to a tracker.
+        val yo = Album("2", "Чёрный альбом", "Кино", "1990")
+        assertTrue(namesAlbum(yo, result("6", "Кино - Черный альбом (1990)", seeds = 1)))
+        assertFalse(namesAlbum(yo, hit))
     }
 
     @Test
