@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +40,7 @@ import io.github.ilevs.p2pmusic.search.SearchController
 import io.github.ilevs.p2pmusic.search.SearchResult
 
 private const val BYTES_PER_MB = 1_048_576f
+private const val MESSAGE_LINES = 3
 
 /** Albums from the catalog (the app picks the release), or raw releases from the tracker. */
 @Composable
@@ -55,7 +57,10 @@ fun SearchScreen(
     var showAlbums by rememberSaveable { mutableStateOf(true) }
     val isLoading = if (showAlbums) catalogState.isLoading else state.isLoading
     val message = if (showAlbums) catalogState.message else state.message
+    val keyboard = LocalSoftwareKeyboardController.current
     val search = {
+        // The keyboard stays up otherwise and covers the results, which the app draws under it.
+        keyboard?.hide()
         when {
             query.isBlank() -> Unit
             showAlbums -> catalog.search(query.trim())
@@ -66,22 +71,7 @@ fun SearchScreen(
         modifier = modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text(stringResource(R.string.search_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { search() }),
-                modifier = Modifier.weight(1f),
-            )
-            Button(
-                onClick = search,
-                enabled = query.isNotBlank() && !isLoading,
-                modifier = Modifier.padding(start = 8.dp),
-            ) { Text(stringResource(R.string.search)) }
-        }
+        SearchBar(query = query, onQuery = { query = it }, enabled = !isLoading, onSearch = search)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = showAlbums,
@@ -95,7 +85,15 @@ fun SearchScreen(
             )
         }
         if (isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        message?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
+        // A few lines at most: on a head unit's small screen long tracker errors left no room for the results.
+        message?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = MESSAGE_LINES,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         val showLibrary = showAlbums && catalogState.albums.isEmpty() && catalogState.library.isNotEmpty()
         if (showLibrary) Text(text = stringResource(R.string.library), style = MaterialTheme.typography.titleMedium)
         SearchResults(
@@ -109,6 +107,31 @@ fun SearchScreen(
 }
 
 /** Albums when [albums] is not null, otherwise tracker [results]. */
+@Composable
+private fun SearchBar(
+    query: String,
+    onQuery: (String) -> Unit,
+    enabled: Boolean,
+    onSearch: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQuery,
+            label = { Text(stringResource(R.string.search_label)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            modifier = Modifier.weight(1f),
+        )
+        Button(
+            onClick = onSearch,
+            enabled = query.isNotBlank() && enabled,
+            modifier = Modifier.padding(start = 8.dp),
+        ) { Text(stringResource(R.string.search)) }
+    }
+}
+
 @Composable
 private fun SearchResults(
     albums: List<Album>?,

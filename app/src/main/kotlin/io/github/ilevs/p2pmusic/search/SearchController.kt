@@ -24,6 +24,8 @@ const val SOULSEEK = "Soulseek"
 // Enough folders to show, and the most the list shows.
 private const val ENOUGH_FOLDERS = 10
 private const val MAX_FOLDERS = 30
+private const val ALBUM_TRACKS = 3
+private const val RACE_MS = 60_000L
 
 data class SearchState(
     val results: List<SearchResult> = emptyList(),
@@ -57,7 +59,8 @@ class SearchController(
             if (found.isEmpty()) {
                 val trackers = torrents.exceptionOrNull()?.message ?: "${source.name}: ничего не найдено"
                 val (results, answer) = searchSoulseek(query)
-                results to "$trackers; $SOULSEEK: $answer"
+                // Soulseek first: a long tracker error is cut off on a small screen.
+                results to "$SOULSEEK: $answer. $trackers"
             } else {
                 found to null
             }
@@ -69,9 +72,12 @@ class SearchController(
         result: SearchResult,
         engine: TorrentEngine,
     ): OpenedAlbum {
-        val files = folders[result.id] ?: return torrentAlbum(source.open(result, engine), null)
+        val tapped = folders[result.id] ?: return torrentAlbum(source.open(result, engine), null)
+        // One user often keeps us queued for minutes; the same release under the same folder name sits with others.
+        val twins = folders.values.filter { folderResult(it).title.equals(result.title, ignoreCase = true) }
+        val winner = soulseek.race(twins.map { it[0] }, RACE_MS)
+        val files = twins.firstOrNull { it[0] == winner } ?: tapped.also { soulseek.download(it[0]) }
         // In order: the user sends them one after another, so each next track is on disk before it is needed.
-        soulseek.download(files[0])
         files.drop(1).forEach { runCatching { soulseek.download(it) } }
         return OpenedAlbum(null, result.title, files.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
     }
@@ -90,9 +96,9 @@ class SearchController(
             runCatching {
                 check(user.soulseekLogin.isNotBlank()) { "впишите логин в Настройках, раздел Soulseek" }
                 soulseek.connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding)
-                // Whole albums before folders with a single track; stable, so a free slot still leads within.
+                // Albums before stray tracks; stable, so a free slot and speed still lead within each.
                 audioFolders(soulseek.search(query) { audioFolders(it).size >= ENOUGH_FOLDERS })
-                    .sortedByDescending { it.size }
+                    .sortedByDescending { it.size >= ALBUM_TRACKS }
                     .take(MAX_FOLDERS)
             }
         val list = found.getOrDefault(emptyList())
