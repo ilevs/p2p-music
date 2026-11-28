@@ -309,7 +309,7 @@ python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Раздачи" || fail "No releases tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
 adb shell input keyevent KEYCODE_MOVE_END
-adb shell input keyevent $(for _ in $(seq 60); do printf '67 '; done)
+adb shell input keyevent $(for _ in $(seq 60); do printf '67 112 '; done)
 adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 searched=$(date +%s)
