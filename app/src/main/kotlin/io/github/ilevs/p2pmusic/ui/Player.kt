@@ -16,7 +16,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -36,6 +35,8 @@ private const val ICON_PART = 0.6f
 /** What the player shows about the current track. */
 internal data class Playback(
     val title: String = "",
+    // The playing track's, which can be another album than the one opened in the track list.
+    val coverUrl: String? = null,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val isPlaying: Boolean = false,
@@ -57,6 +58,7 @@ internal fun playbackState(player: Player): State<Playback> =
                         player.mediaMetadata.title
                             ?.toString()
                             .orEmpty(),
+                    coverUrl = player.mediaMetadata.artworkUri?.toString(),
                     positionMs = player.currentPosition,
                     durationMs = player.duration.coerceAtLeast(0L),
                     isPlaying = player.isPlaying,
@@ -75,7 +77,6 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val playback by playbackState(controller.player)
-    val state by controller.state.collectAsState()
     if (!playback.hasTrack) return
     Surface(tonalElevation = 3.dp, modifier = modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Column {
@@ -84,7 +85,7 @@ fun MiniPlayer(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                state.coverUrl?.let { Cover(it, Modifier.size(40.dp)) }
+                playback.coverUrl?.let { Cover(it, Modifier.size(40.dp)) }
                 Text(
                     text = playback.title,
                     maxLines = 1,

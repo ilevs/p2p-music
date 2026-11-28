@@ -78,14 +78,14 @@ class CatalogController(
     }
 
     /**
-     * Plays from the library when the album was played before (works offline), else from a new release.
-     * The search runs as part of the player's open, so the player drops the album before at once
-     * and shows this one loading, then playing or the reason it was not found.
+     * Opens from the library when the album was played before (works offline), else from a new release.
+     * The search runs as part of the player's open, so the player shows this album loading, then its tracks
+     * or the reason it was not found; the track before plays on until one of the new tracks is tapped.
      * Soulseek only when the trackers have no release that holds the album, or fail.
      */
-    fun play(album: Album) {
-        stream.openAlbum(autoplay = true, album.coverUrl) {
-            runCatching { openTorrent(album) }.getOrElse { playFromSoulseek(album, it.message ?: it.toString()) }
+    fun open(album: Album) {
+        stream.openAlbum(album.coverUrl) {
+            runCatching { openTorrent(album) }.getOrElse { openFromSoulseek(album, it.message ?: it.toString()) }
         }
     }
 
@@ -147,7 +147,7 @@ class CatalogController(
      * sends the rest of the album right after it, so the next track is on disk before it is needed.
      * [why] says what the trackers said.
      */
-    private fun playFromSoulseek(
+    private fun openFromSoulseek(
         album: Album,
         why: String,
     ): OpenedAlbum {
