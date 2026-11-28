@@ -2,7 +2,9 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
+import io.github.ilevs.p2pmusic.UserSettings
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
+import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.parseAlbums
 import io.github.ilevs.p2pmusic.playback.AudioFile
@@ -10,6 +12,7 @@ import io.github.ilevs.p2pmusic.playback.OpenedAlbum
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.listAudio
 import io.github.ilevs.p2pmusic.playback.torrentAlbum
+import io.github.ilevs.p2pmusic.search.SOULSEEK
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
 import io.github.ilevs.p2pmusic.search.open
@@ -54,7 +57,25 @@ data class CatalogState(
     val liked: List<Album> = emptyList(),
     val isLoading: Boolean = false,
     val message: String? = null,
+    /** The album whose [sources] were found, or null while they are searched for. */
+    val sourcesOf: String? = null,
+    /** Where [sourcesOf] can play from, the expected fastest first; Soulseek, the slowest, last. */
+    val sources: List<SearchResult> = emptyList(),
+    /** The source the album plays from, when it was picked in this run of the app. */
+    val picked: SearchResult? = null,
 )
+
+/** The Soulseek choice among an album's [CatalogState.sources]. */
+val SoulseekSource =
+    SearchResult(
+        id = SOULSEEK,
+        title = SOULSEEK,
+        category = "",
+        sizeBytes = 0,
+        seeds = 0,
+        leeches = 0,
+        source = SOULSEEK,
+    )
 
 /** Album search in the catalog, and playing an album from a release the app picks on the tracker. */
 class CatalogController(
@@ -93,8 +114,51 @@ class CatalogController(
      * Soulseek only when the trackers have no release that holds the album, or fail.
      */
     fun open(album: Album) {
-        stream.openAlbum(album.coverUrl) {
-            runCatching { openTorrent(album) }.getOrElse { openFromSoulseek(album, it.message ?: it.toString()) }
+        mutableState.update { it.copy(sourcesOf = null, sources = emptyList(), picked = null) }
+        stream.openAlbum(album.coverUrl, album.id) {
+            runCatching { openTorrent(album) }.getOrElse { failure ->
+                val why = failure.message ?: failure.toString()
+                val opened = soulseekAlbum(stream.soulseek, settings.load(), album, why)
+                mutableState.update { it.copy(picked = SoulseekSource) }
+                opened
+            }
+        }
+    }
+
+    /**
+     * Opens the album [albumId] from [pick], one of its [CatalogState.sources], and keeps that release for it.
+     * A track of the album playing now goes on until the new source has the same track ready, then plays from it.
+     */
+    fun playFrom(
+        albumId: String,
+        pick: SearchResult,
+    ) {
+        val album = findAlbum(settings, state.value.albums, albumId) ?: return
+        val track = if (stream.state.value.albumId == albumId) stream.playingIndex() else null
+        // Kept for the album only once it sent the track, so a dead release does not replace a live one.
+        val kept = { opened: OpenedAlbum ->
+            opened.hash?.let { hash ->
+                settings.addToLibrary(SavedAlbum(album, hash))
+                mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
+            }
+            mutableState.update { it.copy(picked = pick) }
+        }
+        stream.openAlbum(album.coverUrl, album.id, track, kept) {
+            if (pick.source == SOULSEEK) {
+                soulseekAlbum(stream.soulseek, settings.load(), album, "Выбран источник $SOULSEEK")
+            } else {
+                torrentAlbum(lookInto(source, stream.engine, album, pick).getOrThrow(), album.title)
+            }
+        }
+    }
+
+    /** Searches the trackers for where the album [albumId] can play from, unless that is known already. */
+    fun findSources(albumId: String) {
+        if (state.value.sourcesOf == albumId) return
+        val album = findAlbum(settings, state.value.albums, albumId) ?: return
+        scope.launch {
+            val found = withContext(io) { runCatching { source.search("${album.artist} ${album.title}") } }
+            mutableState.showSources(album, found.getOrDefault(emptyList()))
         }
     }
 
@@ -116,6 +180,7 @@ class CatalogController(
         val exact = runCatching { source.search("${album.artist} ${album.title}") }.getOrDefault(emptyList())
         val searchMs = (System.nanoTime() - searched) / NANOS_IN_MS
         log.info { "search «${album.artist} ${album.title}»: ${exact.size} found in $searchMs ms" }
+        mutableState.showSources(album, exact)
         val wide by lazy { runCatching { source.search(album.artist) } }
         val picks =
             sequence {
@@ -123,58 +188,13 @@ class CatalogController(
                 yieldAll(rankTorrents(album, wide.getOrDefault(emptyList()) - exact.toSet()))
             }
         val opened =
-            picks.take(MAX_RELEASES_TRIED).firstNotNullOfOrNull { pick -> lookInto(album, pick) }
+            picks.take(MAX_RELEASES_TRIED).firstNotNullOfOrNull { pick ->
+                lookInto(source, stream.engine, album, pick).getOrNull()?.also {
+                    mutableState.update { state -> state.copy(picked = pick) }
+                }
+            }
         val answers = wide.exceptionOrNull()?.let { " ${it.message}" }.orEmpty()
         return opened ?: throw IOException("Альбом «${album.title}» не найден на трекерах (${source.name}).$answers")
-    }
-
-    // The handle of [pick] if it holds the album, else null: a release that fails to open is one more miss.
-    private fun lookInto(
-        album: Album,
-        pick: SearchResult,
-    ): TorrentHandle? {
-        val started = System.nanoTime()
-        val opened =
-            runCatching {
-                // A release named after the album opens the usual way; the rest are only looked into,
-                // and their .torrent answers at once where a magnet can take its whole wait.
-                val handle =
-                    if (namesAlbum(album, pick)) {
-                        source.open(pick, stream.engine)
-                    } else {
-                        stream.engine.openTorrent(source.torrentFile(pick))
-                    }
-                handle.also { listAudio(it, album.title) }
-            }
-        val ms = (System.nanoTime() - started) / NANOS_IN_MS
-        log.info { "open ${pick.source} «${pick.title}» (seeds ${pick.seeds}): $opened in $ms ms" }
-        return opened.getOrNull()
-    }
-
-    /**
-     * Races the first track of the best few Soulseek users that have [album] in a folder of its own; the winner
-     * sends the rest of the album right after it, so the next track is on disk before it is needed.
-     * [why] says what the trackers said.
-     */
-    private fun openFromSoulseek(
-        album: Album,
-        why: String,
-    ): OpenedAlbum {
-        val soulseek = connectSoulseek(settings, stream.soulseek, why)
-        val folders =
-            soulseekFolders(
-                album,
-                soulseek.search("${album.artist} ${album.title}") { enoughToRace(album, it, RACE_SIZE) },
-            )
-        if (folders.isEmpty()) throw IOException("$why; в Soulseek «${album.title}» тоже нет")
-        val tracks =
-            folders
-                .take(RACE_SIZE * RACE_ROUNDS)
-                .chunked(RACE_SIZE)
-                .firstNotNullOfOrNull { round -> soulseek.raceFolders(round, RACE_MS) }
-                ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
-        tracks.drop(1).forEach { runCatching { soulseek.download(it) } }
-        return OpenedAlbum(null, album.title, tracks.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
     }
 
     /** Writes the history with each album's .torrent, and the liked albums, so another device plays them offline. */
@@ -230,15 +250,74 @@ class CatalogController(
     }
 }
 
-// Outside the class, which is at detekt's function limit.
-internal fun connectSoulseek(
+// An album played before is in the history; one that only Soulseek had is still in the search results.
+internal fun findAlbum(
     settings: SettingsStore,
+    found: List<Album>,
+    id: String,
+): Album? = settings.library().firstOrNull { it.album.id == id }?.album ?: found.firstOrNull { it.id == id }
+
+// The tracker releases found for [album], the expected fastest first, then Soulseek, which takes the longest.
+// Not private: called from lambdas, and lint forbids synthetic accessors; not in the class: detekt caps its functions.
+internal fun MutableStateFlow<CatalogState>.showSources(
+    album: Album,
+    found: List<SearchResult>,
+) = update { it.copy(sourcesOf = album.id, sources = rankTorrents(album, found) + SoulseekSource) }
+
+// The handle of [pick] if it holds the album, else why not: a release that fails to open is one more miss.
+internal fun lookInto(
+    source: TorrentSource,
+    engine: TorrentEngine,
+    album: Album,
+    pick: SearchResult,
+): Result<TorrentHandle> {
+    val started = System.nanoTime()
+    val opened =
+        runCatching {
+            // A release named after the album opens the usual way; the rest are only looked into,
+            // and their .torrent answers at once where a magnet can take its whole wait.
+            val handle =
+                if (namesAlbum(album, pick)) source.open(pick, engine) else engine.openTorrent(source.torrentFile(pick))
+            handle.also { listAudio(it, album.title) }
+        }
+    val ms = (System.nanoTime() - started) / NANOS_IN_MS
+    log.info { "open ${pick.source} «${pick.title}» (seeds ${pick.seeds}): $opened in $ms ms" }
+    return opened
+}
+
+/**
+ * Races the first track of the best few Soulseek users that have [album] in a folder of its own; the winner
+ * sends the rest of the album right after it, so the next track is on disk before it is needed.
+ * [why] says what the trackers said, or why Soulseek was picked.
+ */
+internal fun soulseekAlbum(
     soulseek: SoulseekEngine,
+    user: UserSettings,
+    album: Album,
     why: String,
-): SoulseekEngine {
-    val user = settings.load()
-    if (user.soulseekLogin.isBlank()) {
-        throw IOException("$why. Впишите логин Soulseek в настройках, чтобы искать и там")
-    }
-    return soulseek.apply { connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding) }
+): OpenedAlbum {
+    connectSoulseek(soulseek, user, why)
+    val folders =
+        soulseekFolders(
+            album,
+            soulseek.search("${album.artist} ${album.title}") { enoughToRace(album, it, RACE_SIZE) },
+        )
+    if (folders.isEmpty()) throw IOException("$why; в Soulseek «${album.title}» тоже нет")
+    val tracks =
+        folders
+            .take(RACE_SIZE * RACE_ROUNDS)
+            .chunked(RACE_SIZE)
+            .firstNotNullOfOrNull { round -> soulseek.raceFolders(round, RACE_MS) }
+            ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
+    tracks.drop(1).forEach { runCatching { soulseek.download(it) } }
+    return OpenedAlbum(null, album.title, tracks.mapIndexed { i, f -> AudioFile(i, f.name, f.size, f.toUri()) })
+}
+
+private fun connectSoulseek(
+    soulseek: SoulseekEngine,
+    user: UserSettings,
+    why: String,
+) {
+    if (user.soulseekLogin.isBlank()) throw IOException("$why. Впишите логин Soulseek в настройках, чтобы искать и там")
+    soulseek.connect(user.soulseekLogin.trim(), user.soulseekPassword, user.seeding)
 }

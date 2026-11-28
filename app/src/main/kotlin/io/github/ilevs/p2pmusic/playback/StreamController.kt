@@ -69,6 +69,8 @@ data class StreamState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val coverUrl: String? = null,
+    /** The catalog album in the player, whose source can be changed; null for a release or magnet opened as is. */
+    val albumId: String? = null,
     val startupMs: Long? = null,
     val seekMs: Long? = null,
     val peers: Int = 0,
@@ -140,18 +142,28 @@ class StreamController(
     }
 
     /**
-     * Opens the album that [open] returns off the main thread (a torrent or Soulseek files) and lists its tracks.
-     * Nothing plays until a track is tapped: the track before plays on, and the first track's opening bytes
-     * come in meanwhile, so a tap on it sounds at once.
+     * Opens the album that [open] returns off the main thread (a torrent or Soulseek files of the catalog album
+     * [albumId], if any) and lists its tracks. Nothing plays until a track is tapped: the track before plays on,
+     * and the first track's opening bytes come in meanwhile, so a tap on it sounds at once. With [playAt] (another
+     * source of the album playing), that track plays as soon as its opening bytes are in, so the sound goes on; a
+     * source that does not send them in time is an error, and the track before plays on. [onOpened] runs off the
+     * main thread for an album that opened (and, with [playAt], sends).
      */
     fun openAlbum(
         coverUrl: String?,
+        albumId: String? = null,
+        playAt: Int? = null,
+        onOpened: (OpenedAlbum) -> Unit = {},
         open: () -> OpenedAlbum,
     ) {
-        mutableState.update { StreamState(isLoading = true) }
+        val before = state.value
+        mutableState.update { StreamState(isLoading = true, albumId = albumId) }
         val mine = ++opens
         scope.launch {
-            val result = runCatching { withContext(io) { open() } }
+            val result =
+                runCatching {
+                    withContext(io) { openSending(engine, playAt, { mine != opens }, open).also(onOpened) }
+                }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
             result
@@ -161,9 +173,19 @@ class StreamController(
                         it.copy(torrentName = album.name, files = album.files, isLoading = false, coverUrl = coverUrl)
                     }
                     watchStats()
-                    launch(io) { prefetchFirstTrack(engine, album) { mine != opens } }
+                    if (playAt != null) {
+                        (album.files.getOrNull(playAt) ?: album.files.firstOrNull())?.let(::play)
+                    } else {
+                        launch(io) { prefetchTrack(engine, album, 0) { mine != opens } }
+                    }
                 }.onFailure { error ->
-                    mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
+                    val message = error.message ?: error.toString()
+                    if (albumId != null && albumId == before.albumId) {
+                        // Another source of the album in the player failed: its tracks stay, from the source it had.
+                        mutableState.value = before.copy(error = message)
+                    } else {
+                        mutableState.update { it.copy(isLoading = false, error = message) }
+                    }
                 }
         }
     }
@@ -191,6 +213,12 @@ class StreamController(
                         .build(),
                 ).build()
         }
+    }
+
+    /** The place in the album's queue of the track playing now, or null when it plays nothing of this album. */
+    fun playingIndex(): Int? {
+        val playing = player.currentMediaItem?.mediaId?.takeIf { player.isPlaying } ?: return null
+        return queueItems().indexOfFirst { it.mediaId == playing }.takeIf { it >= 0 }
     }
 
     fun play(file: AudioFile) {
@@ -249,7 +277,10 @@ class StreamController(
             runCatching { withContext(io) { listAudio(engine.handle(spot.hash), saved?.album?.title) } }
                 .getOrDefault(null to emptyList())
         hash = spot.hash
-        mutableState.update { StreamState(torrentName = name, files = files, coverUrl = saved?.album?.coverUrl) }
+        mutableState.update {
+            val album = saved?.album
+            StreamState(torrentName = name, files = files, coverUrl = album?.coverUrl, albumId = album?.id)
+        }
         watchStats()
         val index = if (saved != null) 0 else files.indexOfFirst { it.index == spot.fileIndex }
         return if (index !in
@@ -289,19 +320,38 @@ class StreamController(
     }
 }
 
-// Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds.
-// Not in the class: detekt caps its functions. Not private: called from a lambda, and lint forbids synthetic accessors.
-internal fun prefetchFirstTrack(
+// Blocks until track [index] (or the first) of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds;
+// false when it cannot start yet. Not in the class: detekt caps its functions. Not private: called from a lambda, and
+// lint forbids synthetic accessors.
+internal fun prefetchTrack(
     engine: TorrentEngine,
     album: OpenedAlbum,
+    index: Int,
     stop: () -> Boolean,
-) {
-    val hash = album.hash ?: return
-    val first = album.files.firstOrNull() ?: return
+): Boolean {
+    val first = album.files.getOrNull(index) ?: album.files.firstOrNull()
+    // Soulseek files: the race already got their opening bytes.
+    val hash = album.hash
+    if (hash == null || first == null) return true
     val started = SystemClock.elapsedRealtime()
     // A failure here only means the player waits for the track, as it did before.
     val ready = runCatching { prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS, stop) }
     log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
+    return ready.getOrDefault(false)
+}
+
+// The album [open] returns; with [playAt], only once that track can start, else an error: the track before plays on.
+internal fun openSending(
+    engine: TorrentEngine,
+    playAt: Int?,
+    stop: () -> Boolean,
+    open: () -> OpenedAlbum,
+): OpenedAlbum {
+    val album = open()
+    if (playAt != null && !prefetchTrack(engine, album, playAt, stop)) {
+        throw IOException("«${album.name}» не отдаёт начало трека, играет прежний источник")
+    }
+    return album
 }
 
 // With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.

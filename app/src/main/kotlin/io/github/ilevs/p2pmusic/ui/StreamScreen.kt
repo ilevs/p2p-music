@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,17 +39,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.ilevs.p2pmusic.R
+import io.github.ilevs.p2pmusic.catalog.CatalogController
+import io.github.ilevs.p2pmusic.catalog.SoulseekSource
 import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.StreamState
 
-private const val MS_PER_SECOND = 1_000f
+private const val MS_PER_SECOND = 1_000L
 private const val BYTES_PER_MB = 1_048_576f
 private const val SECONDS_PER_MINUTE = 60
 
-/** The player: the current track with its controls stays in place, the album's tracks scroll under it. */
+/**
+ * The player: the current track with its controls stays in place, the album's source and tracks scroll under it.
+ */
 @Composable
 fun StreamScreen(
     controller: StreamController,
+    catalog: CatalogController,
     modifier: Modifier = Modifier,
 ) {
     val state by controller.state.collectAsState()
@@ -56,12 +63,12 @@ fun StreamScreen(
         if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 PlayerPanel(controller, state, Modifier.weight(1f))
-                TrackList(controller, state, Modifier.weight(1f))
+                TrackList(controller, catalog, state, Modifier.weight(1f))
             }
         } else {
             Column {
                 PlayerPanel(controller, state)
-                TrackList(controller, state, Modifier.weight(1f))
+                TrackList(controller, catalog, state, Modifier.weight(1f))
             }
         }
     }
@@ -70,11 +77,12 @@ fun StreamScreen(
 @Composable
 private fun TrackList(
     controller: StreamController,
+    catalog: CatalogController,
     state: StreamState,
     modifier: Modifier = Modifier,
 ) {
-    var magnet by rememberSaveable { mutableStateOf("") }
     LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        state.albumId?.let { album -> item { SourcePicker(catalog, album, state.torrentName) } }
         item { StatusText(state) }
         itemsIndexed(state.files, key = { _, file -> file.index }) { i, file ->
             // The number tells a screen reader, and the install check, which track of the album this is.
@@ -91,28 +99,79 @@ private fun TrackList(
                         .padding(vertical = 12.dp),
             )
         }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = magnet,
-                    onValueChange = { magnet = it },
-                    label = { Text(stringResource(R.string.magnet_label)) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
+    }
+}
+
+/** Where the catalog album [albumId] plays from, and the other releases and Soulseek to switch to. */
+@Composable
+private fun SourcePicker(
+    catalog: CatalogController,
+    albumId: String,
+    release: String?,
+    modifier: Modifier = Modifier,
+) {
+    val catalogState by catalog.state.collectAsState()
+    var expanded by remember { mutableStateOf(false) }
+    val picked = catalogState.picked?.takeIf { catalogState.sourcesOf == albumId }
+    Box(modifier = modifier) {
+        OutlinedButton(
+            onClick = {
+                expanded = true
+                catalog.findSources(albumId)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            val name = picked?.title ?: release ?: stringResource(R.string.not_measured)
+            Text(
+                text = stringResource(R.string.source, name),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (catalogState.sourcesOf != albumId) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.sources_searching)) },
+                    onClick = {},
+                    enabled = false,
                 )
-                Button(
-                    onClick = { controller.open(magnet.trim()) },
-                    enabled = magnet.isNotBlank() && !state.isLoading,
-                    modifier = Modifier.padding(start = 8.dp),
-                ) { Text(stringResource(R.string.open)) }
+            }
+            val sources = if (catalogState.sourcesOf == albumId) catalogState.sources else emptyList()
+            sources.forEach { source ->
+                val size = source.sizeBytes / BYTES_PER_MB
+                val details =
+                    if (source == SoulseekSource) {
+                        stringResource(R.string.soulseek_details)
+                    } else {
+                        stringResource(R.string.result_details, source.source, size, source.seeds)
+                    }
+                val current = source == picked
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(text = source.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                text = if (current) stringResource(R.string.source_current, details) else details,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        catalog.playFrom(albumId, source)
+                    },
+                    // The source playing now: picking it again would only reopen it.
+                    enabled = !current,
+                )
             }
         }
-        item { Text(text = statsText(state), style = MaterialTheme.typography.bodySmall) }
     }
 }
 
 @Composable
-private fun StatusText(state: StreamState) {
+internal fun StatusText(state: StreamState) {
     val text =
         when {
             state.isLoading -> stringResource(R.string.loading_metadata)
@@ -175,25 +234,7 @@ private fun PlayerPanel(
     }
 }
 
-@Composable
-private fun statsText(state: StreamState): String {
-    val notMeasured = stringResource(R.string.not_measured)
-    val startup = state.startupMs?.let { stringResource(R.string.seconds, it / MS_PER_SECOND) } ?: notMeasured
-    val seek = state.seekMs?.let { stringResource(R.string.seconds, it / MS_PER_SECOND) } ?: notMeasured
-    val speed = stringResource(R.string.speed, state.downloadRate / BYTES_PER_MB)
-    return stringResource(
-        R.string.stats,
-        startup,
-        seek,
-        state.peers,
-        speed,
-        state.trackersUp,
-        state.trackers,
-        state.dhtNodes,
-    )
-}
-
 private fun formatTime(ms: Long): String {
-    val seconds = ms / MS_PER_SECOND.toLong()
+    val seconds = ms / MS_PER_SECOND
     return "%d:%02d".format(seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)
 }

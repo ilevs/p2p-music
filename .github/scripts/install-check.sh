@@ -37,7 +37,7 @@ if ! adb shell pidof "$package" > /dev/null; then
 fi
 echo "Installed and running."
 
-# Play a track the way a user does: paste a magnet, go to the player, tap the track. A seeder on
+# Play a track the way a user does: paste a magnet on the debug tab, go to the player, tap the track. A seeder on
 # this host is the only peer: the app fetches the metadata from it, then streams the track.
 fail() {
   echo "::endgroup::"
@@ -49,8 +49,8 @@ fail() {
   # What the app opened and prefetched, and how long each step took.
   adb logcat -d -s p2pmusic:I | tail -30
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
-  # The stats line (peers, trackers, DHT) is at the end of the track list, below every file.
-  for _ in $(seq 30); do adb shell input swipe 160 500 160 100 100; done; sleep 1
+  # The stats line (peers, trackers, DHT) is on the debug tab.
+  python3 "$here/tap.py" "Отладка" > /dev/null; sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null; adb shell cat /sdcard/ui.xml | grep -o 'text="Старт[^"]*"'
   adb shell ls -lR "/sdcard/Android/data/$package/files/torrent/downloads" | head -20
   adb shell dumpsys media_session | grep -E "state=|error" | head -10
@@ -61,13 +61,35 @@ fail() {
   echo "::error::$1"
   exit 1
 }
+# Starts the app and opens <magnet> from the debug tab, as a user checking a magnet does.
+open_magnet() {
+  adb shell am force-stop "$package"
+  adb logcat -c
+  adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1
+  for _ in $(seq 20); do
+    python3 "$here/tap.py" "Отладка" > /dev/null && break
+    sleep 1
+  done || fail "No debug tab"
+  python3 "$here/tap.py" "Magnet-ссылка" || fail "No magnet field on the debug tab"
+  # A slow emulator can drop keys typed while its keyboard still opens: type again until the field holds it all.
+  for typing in 1 2 3; do
+    sleep 2
+    # shellcheck disable=SC2046  # one key code per word: end of the line, then delete back
+    [ "$typing" = 1 ] || adb shell input keyevent 123 $(printf '67 %.0s' $(seq 250))
+    # Quoted for the device's shell: the magnet holds "?" and "&".
+    adb shell "input text '$1'"
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml | grep -qF "text=\"${1//&/&amp;}\"" && break
+    echo "Typed: $(adb shell cat /sdcard/ui.xml | grep -oE 'text="magnet[^"]*"')"
+  done
+  # Back hides the keyboard; without a keyboard it would leave the screen.
+  adb shell dumpsys input_method | grep -q "mInputShown=true" && adb shell input keyevent 4
+  python3 "$here/tap.py" "=Открыть" || fail "No open button on the debug tab"
+}
 # Opens <magnet>, goes to the player, taps the track named <track> and waits until it plays:
 # the play button is described as "Пауза" only once the player has data and plays.
 play_track() {
-  adb shell am force-stop "$package"
-  adb logcat -c
-  adb shell am start -a android.intent.action.VIEW -d "$1" "$package/.MainActivity"
-  sleep 10
+  open_magnet "$1"
   python3 "$here/tap.py" "Плеер" || fail "No player tab"
   for _ in $(seq 10); do
     sleep 3
@@ -98,7 +120,7 @@ python3 "$here/seed.py" "$work/$hash.torrent" "$work/data" > seeder.log 2>&1 &
 # adb carries the peer connection; the emulator's NAT left dead connections open on the host side.
 adb reverse tcp:6882 tcp:6882
 trap 'kill %1 2>/dev/null; tail -5 seeder.log' EXIT
-play_track "magnet:?xt=urn:btih:$hash\&x.pe=127.0.0.1:6882" "Тишина" 10
+play_track "magnet:?xt=urn:btih:$hash&x.pe=127.0.0.1:6882" "Тишина" 10
 adb exec-out screencap -p > screen-playing.png
 # Then the next tracks: each has its own length, so the position line shows which one plays. The first track
 # downloads in 15 s at the seeder's rate; once it is complete the torrent counts as finished, as with a short
@@ -118,16 +140,9 @@ name="$(curl -sSfL --retry 3 "$page" | grep -o 'ubuntu-[0-9.]*-desktop-amd64\.is
 curl -sSfL --retry 3 -o "$work/live.torrent" "$page$name"
 live_hash="$(python3 -c 'import sys, libtorrent as lt; print(lt.torrent_info(sys.argv[1]).info_hash())' "$work/live.torrent")"
 echo "Torrent $name $live_hash"
-adb shell am force-stop "$package"
-adb logcat -c
-adb shell am start -a android.intent.action.VIEW \
-  -d "magnet:?xt=urn:btih:$live_hash\&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce" "$package/.MainActivity"
-sleep 10
-python3 "$here/tap.py" "Плеер" || fail "No player tab"
+open_magnet "magnet:?xt=urn:btih:$live_hash&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce"
 for _ in $(seq 30); do
   sleep 3
-  # The stats line sits below the tracks and the magnet field and can be off a small screen.
-  adb shell input swipe 160 500 160 100 100
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   stats="$(adb shell cat /sdcard/ui.xml | grep -o 'text="Старт[^"]*"')"
   peers="$(echo "$stats" | grep -o 'Пиры: [0-9]*' | grep -o '[0-9]*')"
@@ -220,6 +235,77 @@ metric track_tap_to_sound_s "$track_tapped"
 metric album_tap_to_sound_s "$tapped"
 metric launch_to_sound_s "$launched"
 adb exec-out screencap -p > screen-album.png
+# Then another release of the same album from the player's source menu, as a user whose release is slow or in
+# the wrong format: the track plays on until the new release sounds. A release that does not hold the album or
+# send the track is an error the user sees while the old release plays on; the check then picks the next one, as a
+# user would. The sound must never stop for long; a live swarm may have no other working release, which only warns.
+tried=
+playing=
+for attempt in 1 2 3; do
+  python3 "$here/tap.py" "Источник: " || fail "No source menu in the player"
+  other=
+  for _ in $(seq 30); do
+    sleep 1
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml > ui.xml
+    # The first release below the one playing ("Сейчас · ...") that was not tried yet: the menu's title and
+    # details are two texts one after the other.
+    other="$(python3 - ui.xml "$tried" <<'PY'
+import sys, xml.etree.ElementTree as ET
+texts = [n.get("text") for n in ET.parse(sys.argv[1]).iter("node") if n.get("text")]
+tried = sys.argv[2].split("\n")
+for title, details in zip(texts, texts[1:]):
+    if " МБ · Сиды: " in details and not details.startswith("Сейчас") and title not in tried:
+        print(title)
+        break
+PY
+)"
+    [ -n "$other" ] && break
+  done
+  [ -n "$other" ] || { grep -oE 'text="[^"]+"' ui.xml | head -30; break; }
+  tried="$tried$other"$'\n'
+  echo "Source $attempt: $other"
+  python3 "$here/tap.py" "=$other" || fail "No release $other in the source menu"
+  switched=$(date +%s)
+  last_sound=$switched
+  replaced=
+  for _ in $(seq 75); do
+    sleep 1
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml > ui.xml
+    grep -q 'text="Ошибка: ' ui.xml && break
+    if ! grep -q 'content-desc="Пауза"' ui.xml; then
+      # Swapping tracks takes a moment, and so may the old release's next track on the emulator's slow link;
+      # half a minute is a source switch that cut the sound.
+      [ $(($(date +%s) - last_sound)) -le 30 ] || {
+        grep -oE '(text|content-desc)="[^"]+"' ui.xml | head -40
+        fail "The sound stopped while switching to another release"
+      }
+      continue
+    fi
+    # The button names the new release once it holds the album and sent the track, and the loading line goes
+    # when its track replaced the one before: from then on "Пауза" is the new release's sound.
+    if ! grep -q 'text="Ищу пиров' ui.xml && python3 -c 'import sys, xml.etree.ElementTree as ET; sys.exit(all(n.get("text") != "Источник: " + sys.argv[2] for n in ET.parse(sys.argv[1]).iter("node")))' ui.xml "$other"; then
+      [ -n "$replaced" ] && { playing=yes; break; }
+      # The first sight of the new release can still show the old track's last frame: look once more.
+      replaced=yes
+      continue
+    fi
+    last_sound=$(date +%s)
+  done
+  [ -n "$playing" ] && break
+  grep -oE 'text="Ошибка[^"]*"' ui.xml || true
+  # The old release must still sound after a source that failed.
+  grep -q 'content-desc="Пауза"' ui.xml || fail "The old release went silent after another release failed"
+done
+echo "METRIC source_switch_attempts=$attempt" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+adb exec-out screencap -p > screen-source.png
+if [ -n "$playing" ]; then
+  metric source_switch_to_sound_s "$switched"
+  metric source_switch_silence_s "$last_sound"
+else
+  echo "::warning::No other release of the album sent its track; the first one played on"
+fi
 # Then another album of the same artist: the player must leave the first and play the second. On ilia's phone
 # every album of an artist opened the same release on 2026-11-28. "Shine On You Crazy Diamond" opens the second.
 python3 "$here/tap.py" "Поиск" || fail "No search tab"
