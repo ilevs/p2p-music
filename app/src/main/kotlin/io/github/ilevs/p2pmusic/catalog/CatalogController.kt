@@ -162,7 +162,6 @@ class CatalogController(
         }
     }
 
-
     // The saved release, else a new one; saved only once the torrent proved to hold the album.
     private fun openTorrent(album: Album): OpenedAlbum {
         val saved = settings.library().firstOrNull { it.album.id == album.id }
