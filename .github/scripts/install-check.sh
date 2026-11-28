@@ -248,6 +248,8 @@ adb exec-out screencap -p > screen-nnm-album.png
 echo "Texts with the NNM-Club album:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -40
 [ -n "$playing" ] || fail "The album that only NNM-Club has does not play"
 metric nnm_album_tap_to_sound_s "$tapped"
+# Which releases the three albums opened and how long each search and each try took.
+adb logcat -d -s p2pmusic:I | grep -E "search|open" | tail -30
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
   adb logcat -d -b crash
