@@ -78,7 +78,7 @@ class RuTrackerTest {
         repeat(2) { server.enqueue(page("<title>Just a moment...</title>").setResponseCode(403)) }
         val atLogin = runCatching { tracker.login() }.exceptionOrNull()?.message.orEmpty()
         val atSearch = runCatching { tracker.search("кино") }.exceptionOrNull()?.message.orEmpty()
-        assertTrue(atLogin, "Cloudflare" in atLogin && "Проверьте прокси" !in atLogin)
+        assertTrue(atLogin, "Cloudflare" in atLogin && "прокси" !in atLogin)
         assertTrue(atSearch, "Cloudflare" in atSearch)
     }
 
