@@ -154,8 +154,10 @@ python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
 python3 "$here/tap.py" "Найти" || fail "No search button"
 searched=$(date +%s)
-for _ in $(seq 20); do
+for i in $(seq 60); do
   sleep 1
+  # MusicBrainz answers 503 for minutes to the runners' shared addresses: search again, as a user would.
+  [ $((i % 15)) -eq 0 ] && python3 "$here/tap.py" "Найти" > /dev/null
   # The row's "artist · year" line: the catalog also lists tributes named after the album.
   python3 "$here/tap.py" "Pink Floyd · 1973" && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
@@ -231,8 +233,9 @@ python3 "$here/tap.py" "Поиск" || fail "No search tab"
 python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
 adb shell input text "Pink%sFloyd%sThe%sDark%sSide%sof%sthe%sMoon"
 python3 "$here/tap.py" "Найти" || fail "No search button"
-for _ in $(seq 10); do
+for i in $(seq 20); do
   sleep 3
+  [ $((i % 5)) -eq 0 ] && python3 "$here/tap.py" "Найти" > /dev/null
   python3 "$here/tap.py" "Pink Floyd · 1973" && break
 done || fail "The catalog shows no Pink Floyd album of 1973"
 tapped=$(date +%s)
