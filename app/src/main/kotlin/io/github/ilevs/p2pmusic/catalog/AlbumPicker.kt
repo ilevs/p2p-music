@@ -55,14 +55,18 @@ internal fun soulseekFolders(
 ): List<List<SoulseekFile>> {
     val artist = normalize(album.artist)
     val title = normalize(album.title)
-    return files
-        .filter { isAudioFile(it.name) && artist in normalize(it.path) && title in normalize(it.folder) }
+    return audioFolders(files.filter { artist in normalize(it.path) && title in normalize(it.folder) })
+        .distinctBy { it[0].user }
+}
+
+/** The audio files of [files] by user and folder, tracks in order; a free upload slot first, then the fastest. */
+internal fun audioFolders(files: List<SoulseekFile>): List<List<SoulseekFile>> =
+    files
+        .filter { isAudioFile(it.name) }
         .groupBy { it.user to it.folder }
         .values
         .map { folder -> folder.sortedBy { it.name } }
         .sortedWith(compareByDescending<List<SoulseekFile>> { it[0].freeSlots > 0 }.thenByDescending { it[0].speed })
-        .distinctBy { it[0].user }
-}
 
 /** Enough answers to start racing: that many users with the album and a free slot. */
 internal fun enoughToRace(
