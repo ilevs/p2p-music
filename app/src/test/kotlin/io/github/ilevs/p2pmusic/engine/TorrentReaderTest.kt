@@ -139,12 +139,20 @@ class TorrentReaderTest {
         assertArrayEquals(track, readAll(TorrentReader(engine, ref, 0)))
     }
 
-    // A skipped album must not download: the prefetch sets piece deadlines and leaves the file unselected.
+    // libtorrent parks the data of unselected files in a part file, and a track tapped while a piece there is half
+    // written stops the torrent with "End of file". So the prefetch must not write there, and a skipped album
+    // must still not download: the next track shares one piece with the first and gets no other.
     @Test
-    fun prefetchFetchesTheStartWithoutSelectingTheFile() {
-        val ref = TorrentRef(hash, trackIndex())
-        assertTrue(prefetchStart(engine, ref, CACHE_TIMEOUT_MS) { false })
-        assertEquals(Priority.IGNORE, engine.handle(hash).filePriority(trackIndex()))
+    fun prefetchKeepsOutOfThePartFileAndFetchesOnlyTheStart() {
+        assertTrue(prefetchStart(engine, TorrentRef(hash, trackIndex()), CACHE_TIMEOUT_MS) { false })
+        val downloads = File(temp.root, "engine/downloads").walk().map { it.name }.toList()
+        assertEquals(emptyList<String>(), downloads.filter { it.endsWith(".parts") })
+        val handle = engine.handle(hash)
+        val nextStart = info.files().fileOffset(fileIndex(NEXT_TRACK_NAME))
+        val firstInside = ((nextStart + PIECE_SIZE - 1) / PIECE_SIZE).toInt()
+        val inside = firstInside until ((nextStart + COVER_SIZE) / PIECE_SIZE).toInt()
+        Thread.sleep(SETTLE_MS)
+        inside.forEach { assertFalse("piece $it", handle.havePiece(it)) }
     }
 
     @Test
@@ -189,6 +197,7 @@ class TorrentReaderTest {
         const val BUFFER_SIZE = 10_000
         const val SEED_TIMEOUT_MS = 30_000L
         const val POLL_MS = 50L
+        const val SETTLE_MS = 1_000L
         const val CACHE_TIMEOUT_MS = 10_000L
         const val NANOS_IN_MS = 1_000_000
     }

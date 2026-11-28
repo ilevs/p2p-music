@@ -270,7 +270,8 @@ class StreamController(
                     if (handle != null) {
                         val (status, trackers) = withContext(io) { handle.status() to trackerCounts(handle) }
                         // A disk error pauses the torrent silently; without this the track just never starts.
-                        val diskError = status.errorCode().takeIf { it.isError }?.message
+                        val diskError =
+                            status.errorCode().takeIf { it.isError }?.let { "раздача остановлена, ${it.message}" }
                         mutableState.update {
                             it.copy(
                                 peers = status.numPeers(),

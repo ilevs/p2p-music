@@ -274,12 +274,26 @@ for i in $(seq 40); do
 done || fail "The catalog shows no Little Big album for Antipositive"
 tapped=$(date +%s)
 playing=
-if await_tracks 120; then
-  play_first_track 60 && playing=yes
-fi
+# Its magnet has no tracker, the peers come from the DHT alone, and on 2026-11-28 the few seeds gave nothing for
+# minutes to 2 of 4 runs while every open PR played from them at once. So a silent swarm gets a second album of
+# the same source; a torrent the app stopped is a breakage and fails at once. One of the two must still sound.
+for attempt in 1 2; do
+  if [ "$attempt" = 2 ]; then
+    python3 "$here/tap.py" "Поиск" > /dev/null && python3 "$here/tap.py" "Antipositive, Pt. 1" || break
+    tapped=$(date +%s)
+  fi
+  if await_tracks 120; then
+    play_first_track 90 && playing=yes
+  fi
+  grep -q 'раздача остановлена' ui.xml && fail "The app stopped the torrent of the NNM-Club album"
+  [ -n "$playing" ] && break
+done
+echo "METRIC nnm_album_attempts=$attempt" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 adb exec-out screencap -p > screen-nnm-album.png
 echo "Texts with the NNM-Club album:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -40
 [ -n "$playing" ] || fail "The album that only NNM-Club has does not play"
+# A stopped torrent plays what it already has: 2 of the 8 runs that passed here on 2026-11-28 showed "End of file".
+adb shell cat /sdcard/ui.xml | grep -q 'text="Ошибка: ' && fail "The NNM-Club album plays, but the screen shows an error"
 metric nnm_album_tap_to_sound_s "$tapped"
 # Then back to the album before, as a user who changed his mind: its release is already in the session and its
 # first pieces on disk, so it must play without opening anything again.
