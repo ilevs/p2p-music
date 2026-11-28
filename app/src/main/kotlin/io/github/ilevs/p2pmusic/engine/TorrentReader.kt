@@ -75,10 +75,6 @@ class TorrentReader(
         return read
     }
 
-    /** Waits up to [timeoutMs] for the pieces a player reads first, the one at the position and the tail. */
-    fun awaitStart(timeoutMs: Long): Boolean =
-        engine.awaitUntil(timeoutMs) { handle.havePiece(span.pieceAt(position)) && handle.havePiece(span.lastPiece) }
-
     override fun close() {
         if (handle.isValid) {
             deadlinePieces.filterNot(handle::havePiece).forEach(handle::resetPieceDeadline)
@@ -102,4 +98,28 @@ class TorrentReader(
             handle.setPieceDeadline(piece, deadlineMs)
         }
     }
+}
+
+/**
+ * Fetches the pieces a player reads first from [ref], its start and its tail, without selecting the file, so an
+ * album the user skipped past costs two pieces, not a download. True once they are on disk, false after
+ * [timeoutMs] or as soon as [stop] holds.
+ */
+fun prefetchStart(
+    engine: TorrentEngine,
+    ref: TorrentRef,
+    timeoutMs: Long,
+    stop: () -> Boolean,
+): Boolean {
+    val handle = engine.handle(ref.hash)
+    val info = handle.torrentFile()
+    val files = info.files()
+    val span = FileSpan(files.fileOffset(ref.fileIndex), files.fileSize(ref.fileIndex), info.pieceLength())
+    val pieces = setOf(span.pieceAt(0), span.lastPiece)
+    val wasIdle = handle.status().isFinished
+    // A deadline raises a piece out of the "don't download" priority the torrent was added with.
+    pieces.filterNot(handle::havePiece).forEach { handle.setPieceDeadline(it, 0) }
+    // As in TorrentReader: trackers send no seeds to a torrent that announced itself complete.
+    if (wasIdle) handle.forceReannounce()
+    return engine.awaitUntil(timeoutMs) { stop() || pieces.all(handle::havePiece) } && !stop()
 }

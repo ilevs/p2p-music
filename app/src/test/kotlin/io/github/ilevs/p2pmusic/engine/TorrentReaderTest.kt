@@ -134,16 +134,26 @@ class TorrentReaderTest {
         engine.close()
         engine = TorrentEngine(File(temp.root, "engine"), localSettings())
         val started = System.nanoTime()
-        TorrentReader(engine, ref, 0).use { assertTrue(it.awaitStart(CACHE_TIMEOUT_MS)) }
+        assertTrue(prefetchStart(engine, ref, CACHE_TIMEOUT_MS) { false })
         println("METRIC cached_track_start_ms=${(System.nanoTime() - started) / NANOS_IN_MS}")
         assertArrayEquals(track, readAll(TorrentReader(engine, ref, 0)))
     }
 
+    // A skipped album must not download: the prefetch takes the track's first and last pieces only.
     @Test
-    fun startWaitEndsWithoutPeers() {
+    fun prefetchFetchesTheStartWithoutSelectingTheFile() {
+        val ref = TorrentRef(hash, trackIndex())
+        assertTrue(prefetchStart(engine, ref, CACHE_TIMEOUT_MS) { false })
+        val handle = engine.handle(hash)
+        assertEquals(Priority.IGNORE, handle.filePriority(trackIndex()))
+        assertFalse(handle.havePiece(((info.files().fileOffset(trackIndex()) + TRACK_SIZE / 2) / PIECE_SIZE).toInt()))
+    }
+
+    @Test
+    fun prefetchStopsWhenAnotherAlbumIsTapped() {
         TorrentEngine(temp.newFolder(), localSettings()).use { other ->
             other.openTorrent(torrentBytes)
-            TorrentReader(other, TorrentRef(hash, trackIndex()), 0).use { assertFalse(it.awaitStart(1)) }
+            assertFalse(prefetchStart(other, TorrentRef(hash, trackIndex()), CACHE_TIMEOUT_MS) { true })
         }
     }
 

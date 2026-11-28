@@ -16,10 +16,10 @@ import io.github.ilevs.p2pmusic.catalog.albumFiles
 import io.github.ilevs.p2pmusic.catalog.coverUrl
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
-import io.github.ilevs.p2pmusic.engine.TorrentReader
 import io.github.ilevs.p2pmusic.engine.TorrentRef
 import io.github.ilevs.p2pmusic.engine.isAudioFile
 import io.github.ilevs.p2pmusic.engine.parseTorrentUri
+import io.github.ilevs.p2pmusic.engine.prefetchStart
 import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.engine.trackerCounts
 import kotlinx.coroutines.CoroutineDispatcher
@@ -95,6 +95,9 @@ class StreamController(
 
     @Volatile
     private var hash: String? = null
+
+    // Read by a prefetch on the io thread, to stop as soon as another album is tapped.
+    @Volatile
     private var opens = 0
     private var startClock = 0L
     private var seekClock = 0L
@@ -164,7 +167,7 @@ class StreamController(
         scope.launch {
             val result =
                 runCatching {
-                    withContext(io) { open().also { if (autoplay && wasPlaying) prefetchFirstTrack(it) } }
+                    withContext(io) { open().also { if (autoplay && wasPlaying) prefetchFirstTrack(it, mine) } }
                 }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
@@ -185,15 +188,18 @@ class StreamController(
         }
     }
 
-    // Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS.
-    private fun prefetchFirstTrack(album: OpenedAlbum) {
+    // Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or another album is tapped.
+    private fun prefetchFirstTrack(
+        album: OpenedAlbum,
+        mine: Int,
+    ) {
         val hash = album.hash ?: return
         val first = album.files.firstOrNull() ?: return
         val started = SystemClock.elapsedRealtime()
         // A failure here only means the player waits for the track, as it did before.
         val ready =
             runCatching {
-                TorrentReader(engine, TorrentRef(hash, first.index), 0L).use { it.awaitStart(PREFETCH_MS) }
+                prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS) { mine != opens }
             }
         log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
     }
