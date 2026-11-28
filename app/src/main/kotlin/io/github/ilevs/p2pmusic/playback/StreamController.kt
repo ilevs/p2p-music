@@ -162,14 +162,7 @@ class StreamController(
         scope.launch {
             val result =
                 runCatching {
-                    withContext(io) {
-                        open().also { album ->
-                            if (playAt != null && !prefetchTrack(engine, album, playAt) { mine != opens }) {
-                                throw IOException("«${album.name}» не отдаёт начало трека, играет прежний источник")
-                            }
-                            onOpened(album)
-                        }
-                    }
+                    withContext(io) { openSending(engine, playAt, { mine != opens }, open).also(onOpened) }
                 }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
@@ -344,6 +337,20 @@ internal fun prefetchTrack(
     val ready = runCatching { prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS, stop) }
     log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
     return ready.getOrDefault(false)
+}
+
+// The album [open] returns; with [playAt], only once that track can start, else an error: the track before plays on.
+internal fun openSending(
+    engine: TorrentEngine,
+    playAt: Int?,
+    stop: () -> Boolean,
+    open: () -> OpenedAlbum,
+): OpenedAlbum {
+    val album = open()
+    if (playAt != null && !prefetchTrack(engine, album, playAt, stop)) {
+        throw IOException("«${album.name}» не отдаёт начало трека, играет прежний источник")
+    }
+    return album
 }
 
 // With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.
