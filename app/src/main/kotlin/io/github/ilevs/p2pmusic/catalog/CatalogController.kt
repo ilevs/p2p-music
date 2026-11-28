@@ -126,15 +126,20 @@ class CatalogController(
     ) {
         val album = album(albumId) ?: return
         val track = if (stream.state.value.albumId == albumId) stream.playingIndex() else null
-        stream.openAlbum(album.coverUrl, album.id, track) {
-            val opened =
-                if (pick.source == SOULSEEK) {
-                    soulseekAlbum(stream.soulseek, settings.load(), album, "Выбран источник $SOULSEEK")
-                } else {
-                    openTorrent(album, pick)
-                }
+        // Kept for the album only once it sent the track, so a dead release does not replace a live one.
+        val kept = { opened: OpenedAlbum ->
+            opened.hash?.let { hash ->
+                settings.addToLibrary(SavedAlbum(album, hash))
+                mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
+            }
             mutableState.update { it.copy(picked = pick) }
-            opened
+        }
+        stream.openAlbum(album.coverUrl, album.id, track, kept) {
+            if (pick.source == SOULSEEK) {
+                soulseekAlbum(stream.soulseek, settings.load(), album, "Выбран источник $SOULSEEK")
+            } else {
+                torrentAlbum(lookInto(source, stream.engine, album, pick).getOrThrow(), album.title)
+            }
         }
     }
 
@@ -152,20 +157,12 @@ class CatalogController(
     private fun album(id: String): Album? =
         settings.library().firstOrNull { it.album.id == id }?.album ?: state.value.albums.firstOrNull { it.id == id }
 
-    // [pick], else the saved release, else a new one; saved only once the torrent proved to hold the album.
-    private fun openTorrent(
-        album: Album,
-        pick: SearchResult? = null,
-    ): OpenedAlbum {
-        val opened =
-            if (pick != null) {
-                torrentAlbum(lookInto(source, stream.engine, album, pick).getOrThrow(), album.title)
-            } else {
-                val saved = settings.library().firstOrNull { it.album.id == album.id }
-                // Older versions saved releases that do not hold the album; such a one is searched for again.
-                val kept = runCatching { saved?.let { torrentAlbum(stream.engine.handle(it.hash), album.title) } }
-                kept.getOrNull() ?: torrentAlbum(openRelease(album), album.title)
-            }
+    // The saved release, else a new one; saved only once the torrent proved to hold the album.
+    private fun openTorrent(album: Album): OpenedAlbum {
+        val saved = settings.library().firstOrNull { it.album.id == album.id }
+        // Older versions saved releases that do not hold the album; such a one is searched for again.
+        val kept = runCatching { saved?.let { torrentAlbum(stream.engine.handle(it.hash), album.title) } }
+        val opened = kept.getOrNull() ?: torrentAlbum(openRelease(album), album.title)
         settings.addToLibrary(SavedAlbum(album, checkNotNull(opened.hash)))
         mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
         return opened

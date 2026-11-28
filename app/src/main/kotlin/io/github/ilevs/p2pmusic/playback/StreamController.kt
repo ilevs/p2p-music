@@ -145,12 +145,15 @@ class StreamController(
      * Opens the album that [open] returns off the main thread (a torrent or Soulseek files of the catalog album
      * [albumId], if any) and lists its tracks. Nothing plays until a track is tapped: the track before plays on,
      * and the first track's opening bytes come in meanwhile, so a tap on it sounds at once. With [playAt] (another
-     * source of the album playing), that track plays as soon as its opening bytes are in, so the sound goes on.
+     * source of the album playing), that track plays as soon as its opening bytes are in, so the sound goes on; a
+     * source that does not send them in time is an error, and the track before plays on. [onOpened] runs off the
+     * main thread for an album that opened (and, with [playAt], sends).
      */
     fun openAlbum(
         coverUrl: String?,
         albumId: String? = null,
         playAt: Int? = null,
+        onOpened: (OpenedAlbum) -> Unit = {},
         open: () -> OpenedAlbum,
     ) {
         val before = state.value
@@ -160,7 +163,12 @@ class StreamController(
             val result =
                 runCatching {
                     withContext(io) {
-                        open().also { album -> playAt?.let { prefetchTrack(engine, album, it) { mine != opens } } }
+                        open().also { album ->
+                            if (playAt != null && !prefetchTrack(engine, album, playAt) { mine != opens }) {
+                                throw IOException("«${album.name}» не отдаёт начало трека, играет прежний источник")
+                            }
+                            onOpened(album)
+                        }
                     }
                 }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
@@ -319,20 +327,23 @@ class StreamController(
     }
 }
 
-// Blocks until track [index] (or the first) of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds.
-// Not in the class: detekt caps its functions. Not private: called from a lambda, and lint forbids synthetic accessors.
+// Blocks until track [index] (or the first) of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds;
+// false when it cannot start yet. Not in the class: detekt caps its functions. Not private: called from a lambda, and
+// lint forbids synthetic accessors.
 internal fun prefetchTrack(
     engine: TorrentEngine,
     album: OpenedAlbum,
     index: Int,
     stop: () -> Boolean,
-) {
-    val hash = album.hash ?: return
-    val first = album.files.getOrNull(index) ?: album.files.firstOrNull() ?: return
+): Boolean {
+    // Soulseek files: the race already got their opening bytes.
+    val hash = album.hash ?: return true
+    val first = album.files.getOrNull(index) ?: album.files.firstOrNull() ?: return true
     val started = SystemClock.elapsedRealtime()
     // A failure here only means the player waits for the track, as it did before.
     val ready = runCatching { prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS, stop) }
     log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
+    return ready.getOrDefault(false)
 }
 
 // With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.
