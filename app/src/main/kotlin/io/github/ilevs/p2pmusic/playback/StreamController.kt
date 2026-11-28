@@ -1,5 +1,6 @@
 package io.github.ilevs.p2pmusic.playback
 
+import android.net.Uri
 import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
@@ -12,6 +13,7 @@ import io.github.ilevs.p2pmusic.LastPlayed
 import io.github.ilevs.p2pmusic.SavedAlbum
 import io.github.ilevs.p2pmusic.SettingsStore
 import io.github.ilevs.p2pmusic.catalog.albumFiles
+import io.github.ilevs.p2pmusic.catalog.coverUrl
 import io.github.ilevs.p2pmusic.engine.SoulseekEngine
 import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.engine.TorrentRef
@@ -49,6 +51,7 @@ data class StreamState(
     val files: List<AudioFile> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
+    val coverUrl: String? = null,
     val startupMs: Long? = null,
     val seekMs: Long? = null,
     val peers: Int = 0,
@@ -121,6 +124,7 @@ class StreamController(
      */
     fun openHandle(
         album: String? = null,
+        coverUrl: String? = null,
         open: () -> TorrentHandle,
     ) {
         mutableState.update { StreamState(isLoading = true) }
@@ -128,7 +132,9 @@ class StreamController(
             runCatching { withContext(io) { listAudio(open().also { hash = it.infoHash().toHex() }) } }
                 .onSuccess { (name, all) ->
                     val files = album?.let { albumFiles(it, all) } ?: all
-                    mutableState.update { it.copy(torrentName = name, files = files, isLoading = false) }
+                    mutableState.update {
+                        it.copy(torrentName = name, files = files, isLoading = false, coverUrl = coverUrl)
+                    }
                     watchStats()
                     if (album != null) files.firstOrNull()?.let(::play)
                 }.onFailure { error ->
@@ -140,12 +146,13 @@ class StreamController(
     /** Plays [files] that are not in a torrent, e.g. from Soulseek, as the album [name]. Any thread. */
     fun openFiles(
         name: String,
+        coverUrl: String?,
         files: List<AudioFile>,
     ) {
         scope.launch {
             hash = null
             statsJob?.cancel()
-            mutableState.update { StreamState(torrentName = name, files = files) }
+            mutableState.update { StreamState(torrentName = name, files = files, coverUrl = coverUrl) }
             files.firstOrNull()?.let(::play)
         }
     }
@@ -166,6 +173,8 @@ class StreamController(
                         .Builder()
                         .setTitle(it.name.substringAfterLast('/').substringBeforeLast('.'))
                         .setAlbumTitle(current.torrentName)
+                        // The notification and the car show it too.
+                        .setArtworkUri(current.coverUrl?.let(Uri::parse))
                         .setIsBrowsable(false)
                         .setIsPlayable(true)
                         .build(),
@@ -223,7 +232,7 @@ class StreamController(
         val (name, all) = withContext(io) { listAudio(engine.handle(spot.hash)) }
         hash = spot.hash
         val files = saved?.let { albumFiles(it.album.title, all) } ?: all
-        mutableState.update { StreamState(torrentName = name, files = files) }
+        mutableState.update { StreamState(torrentName = name, files = files, coverUrl = saved?.album?.coverUrl) }
         watchStats()
         val index = if (saved != null) 0 else files.indexOfFirst { it.index == spot.fileIndex }
         return if (index !in

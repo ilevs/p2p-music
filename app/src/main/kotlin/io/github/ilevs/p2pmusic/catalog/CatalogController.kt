@@ -63,7 +63,7 @@ class CatalogController(
         run {
             val saved = settings.library().firstOrNull { it.album.id == album.id }
             if (saved != null) {
-                stream.openHandle(album.title) { stream.engine.handle(saved.hash) }
+                stream.openHandle(album.title, album.coverUrl) { stream.engine.handle(saved.hash) }
             } else {
                 // A tracker release first; Soulseek only when the trackers have nothing or fail.
                 val torrent = runCatching { pickRelease(album) }
@@ -72,7 +72,7 @@ class CatalogController(
                     val why = torrent.exceptionOrNull()?.message ?: "На ${source.name} нет раздач с сидами"
                     playFromSoulseek(album, why)
                 } else {
-                    stream.openHandle(album.title) {
+                    stream.openHandle(album.title, album.coverUrl) {
                         source.open(pick, stream.engine).also { handle ->
                             settings.addToLibrary(SavedAlbum(album, handle.infoHash().toHex()))
                             mutableState.update { it.copy(library = settings.library().map { saved -> saved.album }) }
@@ -114,7 +114,8 @@ class CatalogController(
                     soulseek.race(round.map { it.first() }, RACE_MS)?.let { winner -> round.first { it[0] == winner } }
                 } ?: throw IOException("$why; в Soulseek все, у кого есть «${album.title}», сейчас заняты")
         tracks.drop(1).forEach { runCatching { soulseek.download(it) } }
-        stream.openFiles(album.title, tracks.mapIndexed { i, file -> AudioFile(i, file.name, file.size, file.toUri()) })
+        val files = tracks.mapIndexed { i, file -> AudioFile(i, file.name, file.size, file.toUri()) }
+        stream.openFiles(album.title, album.coverUrl, files)
     }
 
     private fun connectSoulseek(why: String): SoulseekEngine {

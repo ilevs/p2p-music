@@ -47,7 +47,7 @@ fail() {
   # The head of a playback error, which the tail above cuts off.
   adb logcat -d -s ExoPlayerImplInternal:E | grep -E -A3 "Playback error|Caused by" | grep -v "^--" | head -40
   echo "Texts on screen:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -40
-  # The stats line (peers, trackers, DHT) is at the bottom of the player list, below every file.
+  # The stats line (peers, trackers, DHT) is at the end of the track list, below every file.
   for _ in $(seq 30); do adb shell input swipe 160 500 160 100 100; done; sleep 1
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null; adb shell cat /sdcard/ui.xml | grep -o 'text="Старт[^"]*"'
   adb shell ls -lR "/sdcard/Android/data/$package/files/torrent/downloads" | head -20
@@ -60,7 +60,7 @@ fail() {
   exit 1
 }
 # Opens <magnet>, goes to the player, taps the track named <track> and waits until it plays:
-# the play button turns into "Пауза" only once the player has data and plays.
+# the play button is described as "Пауза" only once the player has data and plays.
 play_track() {
   adb shell am force-stop "$package"
   adb logcat -c
@@ -73,7 +73,7 @@ play_track() {
   done || fail "No track $2 on the player screen"
   for _ in $(seq "$3"); do
     sleep 3
-    adb shell uiautomator dump /sdcard/ui.xml > /dev/null && adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null && adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' && break
   done || fail "The track does not start playing"
 }
 
@@ -84,7 +84,7 @@ switch_track() {
     sleep 3
     adb shell uiautomator dump /sdcard/ui.xml > /dev/null
     adb shell cat /sdcard/ui.xml | grep -q "text=\"[0-9:]* / $2\"" &&
-      adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"' && break
+      adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' && break
   done || fail "Track $1 does not start playing after another track"
 }
 
@@ -124,7 +124,7 @@ sleep 10
 python3 "$here/tap.py" "Плеер" || fail "No player tab"
 for _ in $(seq 30); do
   sleep 3
-  # The stats line sits below the player and can be off a small screen.
+  # The stats line sits below the tracks and the magnet field and can be off a small screen.
   adb shell input swipe 160 500 160 100 100
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   stats="$(adb shell cat /sdcard/ui.xml | grep -o 'text="Старт[^"]*"')"
@@ -164,10 +164,8 @@ tapped=$(date +%s)
 playing=
 for _ in $(seq 90); do
   sleep 1
-  # The play button sits below the track list, and a real album is longer than the screen.
-  for _ in 1 2 3; do adb shell input swipe 160 500 160 100 100; done
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null
-  if adb shell cat /sdcard/ui.xml | grep -q 'text="Пауза"'; then
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"'; then
     playing=yes
     break
   fi
@@ -177,7 +175,7 @@ done
 # Not "done || fail": a loop that runs out ends with the status of its last command, which is 0 here.
 if [ -z "$playing" ]; then
   adb exec-out screencap -p > screen-album.png
-  echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -o 'text="[^"]*"' | head -60
+  echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -60
   python3 "$here/tap.py" "Поиск"; sleep 2; adb shell uiautomator dump /sdcard/ui.xml > /dev/null
   fail "The album found in the catalog does not play"
 fi
