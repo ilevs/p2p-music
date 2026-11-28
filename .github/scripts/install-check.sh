@@ -71,8 +71,17 @@ open_magnet() {
     sleep 1
   done || fail "No debug tab"
   python3 "$here/tap.py" "Magnet-ссылка" || fail "No magnet field on the debug tab"
-  # Quoted for the device's shell: the magnet holds "?" and "&".
-  adb shell "input text '$1'"
+  # A slow emulator can drop keys typed while its keyboard still opens: type again until the field holds it all.
+  for typing in 1 2 3; do
+    sleep 2
+    # shellcheck disable=SC2046  # one key code per word: end of the line, then delete back
+    [ "$typing" = 1 ] || adb shell input keyevent 123 $(printf '67 %.0s' $(seq 250))
+    # Quoted for the device's shell: the magnet holds "?" and "&".
+    adb shell "input text '$1'"
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+    adb shell cat /sdcard/ui.xml | grep -qF "text=\"${1//&/&amp;}\"" && break
+    echo "Typed: $(adb shell cat /sdcard/ui.xml | grep -oE 'text="magnet[^"]*"')"
+  done
   # Back hides the keyboard; without a keyboard it would leave the screen.
   adb shell dumpsys input_method | grep -q "mInputShown=true" && adb shell input keyevent 4
   python3 "$here/tap.py" "=Открыть" || fail "No open button on the debug tab"
