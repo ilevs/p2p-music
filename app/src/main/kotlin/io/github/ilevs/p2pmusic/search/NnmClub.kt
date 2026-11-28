@@ -5,8 +5,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import java.io.IOException
-import java.net.URLEncoder
 
 private const val CHARSET = "windows-1251"
 
@@ -21,8 +21,9 @@ class NnmClub(
 ) : TorrentSource {
     override val name = "NNM-Club"
 
+    // The query goes as UTF-8 though the pages come in windows-1251; a windows-1251 query finds other topics.
     override fun search(query: String): List<SearchResult> =
-        parseNnmSearch(get("tracker.php") { addEncodedQueryParameter("nm", URLEncoder.encode(query, CHARSET)) })
+        parseNnmSearch(get("tracker.php") { addQueryParameter("nm", query) })
 
     /** From the topic's page: the search page shows no magnets. */
     override fun magnet(result: SearchResult): String =
@@ -39,7 +40,12 @@ class NnmClub(
         page: String,
         query: HttpUrl.Builder.() -> Unit,
     ): String {
-        val url = baseUrl.newBuilder().addPathSegment(page).apply(query).build()
+        val url =
+            baseUrl
+                .newBuilder()
+                .addPathSegment(page)
+                .apply(query)
+                .build()
         return client().newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("NNM-Club: HTTP ${response.code}")
             String(checkNotNull(response.body).bytes(), charset(CHARSET))
@@ -47,7 +53,7 @@ class NnmClub(
     }
 }
 
-// A row: forum, title link (viewtopic.php?t=<id>), author, size as <u>bytes</u> text, seeds, leeches.
+// A row: forum, title link (viewtopic.php?t=<id>), author, download, size as <u>bytes</u>, seeds, leeches.
 internal fun parseNnmSearch(html: String): List<SearchResult> =
     Jsoup.parse(html).select("tr.prow1, tr.prow2").mapNotNull { row ->
         row.selectFirst("a.topictitle[href*=viewtopic.php?t=]")?.let { link ->
@@ -55,9 +61,14 @@ internal fun parseNnmSearch(html: String): List<SearchResult> =
                 id = link.attr("href").substringAfter("t=").takeWhile(Char::isDigit),
                 title = link.text(),
                 category = row.selectFirst("a[href*=tracker.php?f=]")?.text().orEmpty(),
-                sizeBytes = row.select("td.gensmall > u").firstNotNullOfOrNull { it.text().toLongOrNull() } ?: 0L,
-                seeds = row.selectFirst("td.seedmed")?.text()?.trim()?.toIntOrNull() ?: 0,
-                leeches = row.selectFirst("td.leechmed")?.text()?.trim()?.toIntOrNull() ?: 0,
+                sizeBytes = row.count("td.gensmall > u").toLong(),
+                seeds = row.count("td.seedmed").toInt(),
+                leeches = row.count("td.leechmed").toInt(),
             )
         }
     }
+
+private fun Element.count(css: String): Long {
+    val text = selectFirst(css)?.text().orEmpty()
+    return text.trim().toLongOrNull() ?: 0L
+}

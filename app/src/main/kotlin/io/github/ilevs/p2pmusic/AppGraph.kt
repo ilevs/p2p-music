@@ -17,8 +17,8 @@ import io.github.ilevs.p2pmusic.playback.StreamController
 import io.github.ilevs.p2pmusic.playback.TorrentDataSource
 import io.github.ilevs.p2pmusic.search.AllSources
 import io.github.ilevs.p2pmusic.search.Knaben
-import io.github.ilevs.p2pmusic.search.NnmClub
 import io.github.ilevs.p2pmusic.search.MemoryCookieJar
+import io.github.ilevs.p2pmusic.search.NnmClub
 import io.github.ilevs.p2pmusic.search.ProxySettings
 import io.github.ilevs.p2pmusic.search.RuTracker
 import io.github.ilevs.p2pmusic.search.Rutor
