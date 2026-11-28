@@ -77,6 +77,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 pub enum ServerMessage {
     ProcessRead,
     LoginStatus(bool),
+    /// Why the server refused the login, sent just before `LoginStatus(false)`.
+    LoginRejected(String),
     /// The server is closing this connection: the same username logged in
     /// elsewhere.
     Relogged,

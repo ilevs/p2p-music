@@ -30,6 +30,15 @@ class SoulseekEngineTest {
     }
 
     @Test
+    fun aRefusedLoginSaysWhyInTheUsersWords() {
+        assertEquals(
+            "Soulseek: неверный пароль, или это имя уже занял кто-то другой",
+            loginError("Authentication failed: INVALIDPASS"),
+        )
+        assertEquals("Soulseek: Operation timed out", loginError("Operation timed out"))
+    }
+
+    @Test
     fun strangersNamesStayInsideTheDownloadFolder() {
         val dir = Files.createTempDirectory("soulseek").toFile()
         val engine = SoulseekEngine(dir) { FakeApi() }

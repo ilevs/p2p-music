@@ -89,7 +89,7 @@ class SoulseekEngine(
         if (api().isOnline()) return
         // Sharing what we downloaded keeps us off the ban lists of users who refuse leechers.
         val error = api().login(login, password, if (share) dir.path else "", LISTEN_PORT)
-        if (error != null) throw IOException("Soulseek: $error")
+        if (error != null) throw IOException(loginError(error))
         downloads.clear()
     }
 
@@ -183,6 +183,17 @@ class SoulseekEngine(
     // One folder per user and remote folder, so two albums' "01.mp3" never meet.
     private fun folderOf(file: SoulseekFile): File = File(File(dir, safeName(file.user)), safeName(file.folder))
 }
+
+// The server's reasons for a refused login, in the user's words; any other shows as the server put it.
+private val LoginReasons =
+    mapOf(
+        "INVALIDPASS" to "неверный пароль, или это имя уже занял кто-то другой",
+        "INVALIDUSERNAME" to "такое имя нельзя, нужно латиницей и не длиннее 30 знаков",
+        "SVRFULL" to "сервер переполнен, попробуйте позже",
+    )
+
+internal fun loginError(error: String): String =
+    "Soulseek: " + (LoginReasons.entries.firstOrNull { it.key in error }?.value ?: error)
 
 // Names come from strangers: no separators, no "..", and short enough for the file system.
 internal fun safeName(text: String): String =

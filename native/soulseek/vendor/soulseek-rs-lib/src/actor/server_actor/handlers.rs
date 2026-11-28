@@ -30,6 +30,11 @@ impl ServerActor {
             ServerMessage::LoginStatus(message) => {
                 self.handle_login_status(message);
             }
+            ServerMessage::LoginRejected(reason) => {
+                if let Ok(mut ctx) = self.context.write_safe() {
+                    ctx.login_failure = reason;
+                }
+            }
             ServerMessage::Relogged => self.handle_relogged(),
             ServerMessage::PierceFirewall(token) => {
                 self.send_message(
@@ -471,6 +476,7 @@ impl ServerActor {
         }
         if let Ok(mut ctx) = self.context.write_safe() {
             ctx.logged_in = None;
+            ctx.login_failure.clear();
         }
         self.queue_message(MessageFactory::build_login_message(
             &username, &password, version,
@@ -486,8 +492,8 @@ impl ServerActor {
                     break;
                 }
 
-                let logged_in = match context.read_safe() {
-                    Ok(ctx) => ctx.logged_in,
+                let (logged_in, failure) = match context.read_safe() {
+                    Ok(ctx) => (ctx.logged_in, ctx.login_failure.clone()),
                     Err(e) => {
                         let _ = response.send(Err(e));
                         break;
@@ -497,7 +503,7 @@ impl ServerActor {
                     let result = if logged_in {
                         Ok(true)
                     } else {
-                        Err(SoulseekRs::AuthenticationFailed)
+                        Err(SoulseekRs::AuthenticationFailed(failure))
                     };
                     let _ = response.send(result);
                     break;
