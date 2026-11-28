@@ -12,7 +12,7 @@ import java.io.IOException
 private const val USER_AGENT = "P2PMusic/0.1 ( https://github.com/ilevs/p2p-music )"
 private const val PAGE_SIZE = "25"
 private const val YEAR_LENGTH = 4
-private const val ATTEMPTS = 3
+private const val ATTEMPTS = 5
 
 /** An album (MusicBrainz release group). */
 data class Album(
@@ -59,7 +59,8 @@ class MusicBrainz(
         // does not answer at all: the user saw a bare "timeout". Wait and retry.
         var failure = IOException("MusicBrainz: no attempts")
         for (attempt in 1..ATTEMPTS) {
-            if (attempt > 1) Thread.sleep(retryDelayMs)
+            // Each wait is longer: three tries 1.5 s apart still ended in "HTTP 503" on a CI emulator.
+            Thread.sleep(retryDelayMs * (attempt - 1))
             try {
                 return parseReleaseGroups(get(request))
             } catch (e: IOException) {

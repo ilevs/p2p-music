@@ -28,11 +28,11 @@ class CatalogTest {
     @Test
     fun retriesWhenRateLimited() {
         val server = MockWebServer().apply { start() }
-        server.enqueue(MockResponse().setResponseCode(503))
+        repeat(BUSY_ANSWERS) { server.enqueue(MockResponse().setResponseCode(503)) }
         server.enqueue(MockResponse().setBody(RELEASE_GROUPS))
         val albums = MusicBrainz(OkHttpClient(), server.url("/ws/2/"), retryDelayMs = 0).searchAlbums("кино")
         assertEquals(1, albums.size)
-        assertEquals(2, server.requestCount)
+        assertEquals(BUSY_ANSWERS + 1, server.requestCount)
         server.shutdown()
     }
 
@@ -88,6 +88,7 @@ class CatalogTest {
 
     private companion object {
         const val TIMEOUT_MS = 200L
+        const val BUSY_ANSWERS = 4
         val RELEASE_GROUPS =
             """
             {"release-groups": [{
