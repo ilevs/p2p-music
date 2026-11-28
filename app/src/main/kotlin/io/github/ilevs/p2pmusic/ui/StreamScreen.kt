@@ -53,12 +53,12 @@ fun StreamScreen(
         // Landscape head units are short: the controls go beside the tracks instead of above them.
         if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                PlayerPanel(controller, state.coverUrl, Modifier.weight(1f))
+                PlayerPanel(controller, state, Modifier.weight(1f))
                 TrackList(controller, state, Modifier.weight(1f))
             }
         } else {
             Column {
-                PlayerPanel(controller, state.coverUrl)
+                PlayerPanel(controller, state)
                 TrackList(controller, state, Modifier.weight(1f))
             }
         }
@@ -76,7 +76,7 @@ private fun TrackList(
         item { StatusText(state) }
         items(state.files, key = { it.index }) { file ->
             Text(
-                text = file.name,
+                text = file.title,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().clickable { controller.play(file) }.padding(vertical = 12.dp),
@@ -117,7 +117,7 @@ private fun StatusText(state: StreamState) {
 @Composable
 private fun PlayerPanel(
     controller: StreamController,
-    coverUrl: String?,
+    state: StreamState,
     modifier: Modifier = Modifier,
 ) {
     val player = controller.player
@@ -126,7 +126,7 @@ private fun PlayerPanel(
     if (!playback.hasTrack) return
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            coverUrl?.let { Cover(it, Modifier.padding(end = 12.dp).size(64.dp)) }
+            state.coverUrl?.let { Cover(it, Modifier.padding(end = 12.dp).size(64.dp)) }
             Text(
                 text = playback.title,
                 style = MaterialTheme.typography.titleMedium,
@@ -144,7 +144,14 @@ private fun PlayerPanel(
             enabled = playback.durationMs > 0,
         )
         Text(
-            text = stringResource(R.string.position, formatTime(playback.positionMs), formatTime(playback.durationMs)),
+            text =
+                if (playback.isBuffering) {
+                    // Why there is no sound yet: no peers, or they are slow.
+                    val speed = stringResource(R.string.speed, state.downloadRate / BYTES_PER_MB)
+                    stringResource(R.string.buffering, state.peers, speed)
+                } else {
+                    stringResource(R.string.position, formatTime(playback.positionMs), formatTime(playback.durationMs))
+                },
             style = MaterialTheme.typography.bodySmall,
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {

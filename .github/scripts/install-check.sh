@@ -169,8 +169,6 @@ for _ in $(seq 90); do
     playing=yes
     break
   fi
-  # Playback starts on the player tab; an error from the trackers stays on the search screen.
-  python3 "$here/tap.py" "Плеер" > /dev/null || true
 done
 # Not "done || fail": a loop that runs out ends with the status of its last command, which is 0 here.
 if [ -z "$playing" ]; then
@@ -182,6 +180,41 @@ fi
 metric album_tap_to_sound_s "$tapped"
 metric launch_to_sound_s "$launched"
 adb exec-out screencap -p > screen-album.png
+# Then another album of the same artist: the player must leave the first and play the second. On ilia's phone
+# every album of an artist opened the same release on 2026-11-28. "Shine On You Crazy Diamond" opens the second.
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
+adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for _ in $(seq 20); do
+  sleep 1
+  # Any release group by the band: the catalog lists several named like the album, and the 1975 one
+  # can be below a small screen.
+  # The rows of the first search stay until the answer comes: wait for a row titled as the second album.
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Wish You Were Here"' || continue
+  python3 "$here/tap.py" "Pink Floyd · " && break
+done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
+switched=$(date +%s)
+playing=
+for _ in $(seq 90); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
+    adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
+    playing=yes
+    break
+  fi
+done
+if [ -z "$playing" ]; then
+  adb exec-out screencap -p > screen-second-album.png
+  echo "Texts on the player:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -60
+  fail "The second album does not play after the first"
+fi
+metric album_switch_to_sound_s "$switched"
+adb exec-out screencap -p > screen-second-album.png
 echo "::endgroup::"
 if ! adb shell pidof "$package" > /dev/null; then
   adb logcat -d -b crash

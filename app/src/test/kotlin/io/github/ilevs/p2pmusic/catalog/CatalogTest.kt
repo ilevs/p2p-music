@@ -28,11 +28,11 @@ class CatalogTest {
     @Test
     fun retriesWhenRateLimited() {
         val server = MockWebServer().apply { start() }
-        server.enqueue(MockResponse().setResponseCode(503))
+        repeat(BUSY_ANSWERS) { server.enqueue(MockResponse().setResponseCode(503)) }
         server.enqueue(MockResponse().setBody(RELEASE_GROUPS))
         val albums = MusicBrainz(OkHttpClient(), server.url("/ws/2/"), retryDelayMs = 0).searchAlbums("кино")
         assertEquals(1, albums.size)
-        assertEquals(2, server.requestCount)
+        assertEquals(BUSY_ANSWERS + 1, server.requestCount)
         server.shutdown()
     }
 
@@ -65,8 +65,19 @@ class CatalogTest {
         val first = AudioFile(0, "Кино/1988 - Группа крови/01 Группа крови.mp3", 1)
         val second = AudioFile(1, "Кино/1988 - Группа крови/02 Закрой за мной дверь.mp3", 1)
         val other = AudioFile(2, "Кино/1989 - Звезда по имени Солнце/01 Песня.mp3", 1)
-        assertEquals(listOf(first, second), albumFiles("Группа крови", listOf(first, second, other)))
-        assertEquals(listOf(other), albumFiles("Чёрный альбом", listOf(other)))
+        val all = listOf(first, second, other)
+        assertEquals(listOf(first, second), albumFiles("Группа крови", "Кино - Дискография", all))
+        // A release named after the album keeps its files whatever its folders are called.
+        assertEquals(listOf(other), albumFiles("Чёрный альбом", "Кино - Чёрный альбом (1990)", listOf(other)))
+    }
+
+    @Test
+    fun playsNothingFromAReleaseWithoutTheAlbum() {
+        // ilia tapped "Джон Леннон" (1983) and got the top John Lennon release, another album, on 2026-11-28.
+        val imagine = AudioFile(0, "John Lennon - Imagine (2023) FLAC/Disc 1/01. Crippled Inside.flac", 1)
+        val release = "John Lennon - Imagine (2023) FLAC"
+        assertEquals(emptyList<AudioFile>(), albumFiles("Джон Леннон", release, listOf(imagine)))
+        assertEquals("01. Crippled Inside", imagine.title)
     }
 
     private fun result(
@@ -77,6 +88,7 @@ class CatalogTest {
 
     private companion object {
         const val TIMEOUT_MS = 200L
+        const val BUSY_ANSWERS = 4
         val RELEASE_GROUPS =
             """
             {"release-groups": [{
