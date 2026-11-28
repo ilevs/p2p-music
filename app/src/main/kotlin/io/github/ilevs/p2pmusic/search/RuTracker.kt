@@ -16,10 +16,12 @@ private const val LOGGED_IN_MARKER = "logged-in-username"
 private const val CAPTCHA_MARKER = "cap_sid"
 private const val HTTP_FORBIDDEN = 403
 
-// The proxy works and the site is up, so "check the proxy" would send the user the wrong way.
+// Measured from a CI runner on 2026-11-28: the front page opens, but login.php and tracker.php answer with
+// Cloudflare's browser check on rutracker.org and rutracker.net, whatever headers the client sends.
+// So neither "check the proxy" nor "take another proxy" is honest advice.
 private const val CLOUDFLARE_CHECK =
-    "RuTracker: сайт закрыт проверкой Cloudflare «Я не робот» для адреса, с которого идёт запрос. " +
-        "Приложение её не проходит: нужен другой прокси или VPN"
+    "RuTracker: вход и поиск на сайте закрыты проверкой Cloudflare «Я не робот», её проходит только браузер. " +
+        "Приложение открыть RuTracker не может, поиск идёт по остальным источникам"
 
 data class Credentials(
     val login: String,
