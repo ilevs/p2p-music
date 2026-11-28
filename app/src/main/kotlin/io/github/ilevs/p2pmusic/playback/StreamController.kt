@@ -19,6 +19,7 @@ import io.github.ilevs.p2pmusic.engine.TorrentEngine
 import io.github.ilevs.p2pmusic.engine.TorrentRef
 import io.github.ilevs.p2pmusic.engine.isAudioFile
 import io.github.ilevs.p2pmusic.engine.parseTorrentUri
+import io.github.ilevs.p2pmusic.engine.prefetchStart
 import io.github.ilevs.p2pmusic.engine.toUri
 import io.github.ilevs.p2pmusic.engine.trackerCounts
 import kotlinx.coroutines.CoroutineDispatcher
@@ -35,9 +36,14 @@ import kotlinx.coroutines.withContext
 import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.TorrentHandle
 import java.io.IOException
+import java.util.logging.Logger
 
 private const val STATS_INTERVAL_MS = 1_000L
 private const val SAVE_INTERVAL_MS = 5_000L
+private const val PREFETCH_MS = 30_000L
+
+// Shows in logcat under the tag "p2pmusic", as the catalog's release tries do.
+private val log = Logger.getLogger("p2pmusic")
 
 data class AudioFile(
     val index: Int,
@@ -89,6 +95,9 @@ class StreamController(
 
     @Volatile
     private var hash: String? = null
+
+    // Read by a prefetch on the io thread, to stop as soon as another album is tapped.
+    @Volatile
     private var opens = 0
     private var startClock = 0L
     private var seekClock = 0L
@@ -150,13 +159,18 @@ class StreamController(
         coverUrl: String?,
         open: () -> OpenedAlbum,
     ) {
-        // The album before must not stay in the player while the next one loads, or after it failed to open.
-        player.stop()
-        player.clearMediaItems()
+        // The track before plays on while this album opens (seconds for a torrent, a minute for Soulseek) and
+        // until its first track has its opening bytes; then the album replaces it, or a failure stops it.
+        val wasPlaying = player.isPlaying
         mutableState.update { StreamState(isLoading = true) }
         val mine = ++opens
         scope.launch {
-            val result = runCatching { withContext(io) { open() } }
+            val result =
+                runCatching {
+                    withContext(io) {
+                        open().also { if (autoplay && wasPlaying) prefetchFirstTrack(engine, it) { mine != opens } }
+                    }
+                }
             // A slower open of an album tapped earlier must not replace the one tapped after it.
             if (mine != opens) return@launch
             result
@@ -168,6 +182,9 @@ class StreamController(
                     watchStats()
                     if (autoplay) files.firstOrNull()?.let(::play)
                 }.onFailure { error ->
+                    // The album before must not stay in the player after the tapped one failed to open.
+                    player.stop()
+                    player.clearMediaItems()
                     mutableState.update { it.copy(isLoading = false, error = error.message ?: error.toString()) }
                 }
         }
@@ -292,6 +309,21 @@ class StreamController(
                 }
             }
     }
+}
+
+// Blocks until the first track of a torrent [album] can start, at most PREFETCH_MS, or until [stop] holds.
+// Not in the class: detekt caps its functions. Not private: called from a lambda, and lint forbids synthetic accessors.
+internal fun prefetchFirstTrack(
+    engine: TorrentEngine,
+    album: OpenedAlbum,
+    stop: () -> Boolean,
+) {
+    val hash = album.hash ?: return
+    val first = album.files.firstOrNull() ?: return
+    val started = SystemClock.elapsedRealtime()
+    // A failure here only means the player waits for the track, as it did before.
+    val ready = runCatching { prefetchStart(engine, TorrentRef(hash, first.index), PREFETCH_MS, stop) }
+    log.info { "prefetch «${first.title}»: $ready in ${SystemClock.elapsedRealtime() - started} ms" }
 }
 
 // With an [album], only its files; a torrent that does not hold it is an error, not a reason to play another.
