@@ -254,6 +254,33 @@ adb exec-out screencap -p > screen-nnm-album.png
 echo "Texts with the NNM-Club album:"; adb shell cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"' | head -40
 [ -n "$playing" ] || fail "The album that only NNM-Club has does not play"
 metric nnm_album_tap_to_sound_s "$tapped"
+# Then back to the album before, as a user who changed his mind: its release is already in the session and its
+# first pieces on disk, so it must play without opening anything again.
+python3 "$here/tap.py" "Поиск" || fail "No search tab"
+python3 "$here/tap.py" "Артист, альбом" || fail "No search field"
+# shellcheck disable=SC2046  # one key code per word: end of the line, then delete what the field kept
+adb shell input keyevent 123 $(printf '67 %.0s' $(seq 60))
+adb shell input text "Pink%sFloyd%sWish%sYou%sWere%sHere"
+python3 "$here/tap.py" "Найти" || fail "No search button"
+for _ in $(seq 20); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  adb shell cat /sdcard/ui.xml | grep -q 'text="Wish You Were Here"' || continue
+  python3 "$here/tap.py" "Pink Floyd · " && break
+done || fail "The catalog shows no Pink Floyd album for Wish You Were Here"
+returned=$(date +%s)
+playing=
+for _ in $(seq 60); do
+  sleep 1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null
+  if adb shell cat /sdcard/ui.xml | grep -q 'content-desc="Пауза"' &&
+    adb shell cat /sdcard/ui.xml | grep -qi 'text="[^"]*Shine On'; then
+    playing=yes
+    break
+  fi
+done
+[ -n "$playing" ] || fail "The album played before does not play again after another one"
+metric album_return_to_sound_s "$returned"
 # Which releases the three albums opened and how long each search and each try took.
 adb logcat -d -s p2pmusic:I | grep -E "search|open" | tail -30
 echo "::endgroup::"
