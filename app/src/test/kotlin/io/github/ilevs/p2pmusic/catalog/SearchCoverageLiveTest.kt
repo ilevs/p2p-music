@@ -2,6 +2,7 @@ package io.github.ilevs.p2pmusic.catalog
 
 import io.github.ilevs.p2pmusic.search.AllSources
 import io.github.ilevs.p2pmusic.search.Knaben
+import io.github.ilevs.p2pmusic.search.NnmClub
 import io.github.ilevs.p2pmusic.search.Rutor
 import io.github.ilevs.p2pmusic.search.SearchResult
 import io.github.ilevs.p2pmusic.search.TorrentSource
@@ -22,7 +23,8 @@ class SearchCoverageLiveTest {
         val rutor = Rutor(client = { client })
         val knaben = Knaben(client = { client })
         // "all" is the app's own setup: Knaben only when the trackers find nothing.
-        for (source in listOf(rutor, knaben, AllSources(listOf(rutor), fallback = listOf(knaben)))) {
+        val nnm = NnmClub(client = { client })
+        for (source in listOf(rutor, knaben, nnm, AllSources(listOf(rutor), fallback = listOf(knaben, nnm)))) {
             val times = mutableListOf<Long>()
             val found =
                 Albums.filter { album ->
@@ -48,7 +50,8 @@ class SearchCoverageLiveTest {
         results: List<SearchResult>,
     ) = rankTorrents(album, results).any { namesAlbum(album, it) }
 
-    private fun label(source: TorrentSource) = if (source is AllSources) "all" else source.name.lowercase()
+    private fun label(source: TorrentSource) =
+        if (source is AllSources) "all" else source.name.lowercase().replace('-', '_')
 
     private companion object {
         // Russian and Western, popular and niche; the set of the 2026-11-28 source research.

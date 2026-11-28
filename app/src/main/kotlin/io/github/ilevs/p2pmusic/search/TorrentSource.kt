@@ -31,6 +31,9 @@ interface TorrentSource {
 
     /** The .torrent file of a search result. */
     fun torrentFile(result: SearchResult): ByteArray
+
+    /** The magnet link of a search result, "" when there is none; a tracker may need a request for it. */
+    fun magnet(result: SearchResult): String = result.magnet
 }
 
 /**
@@ -85,6 +88,9 @@ class AllSources(
         message: String,
     ) = if (message.startsWith(source.name)) message else "${source.name}: $message"
 
+    override fun magnet(result: SearchResult): String =
+        (sources + fallback).firstOrNull { it.name == result.source }?.magnet(result) ?: result.magnet
+
     override fun torrentFile(result: SearchResult): ByteArray {
         val source = (sources + fallback).first { it.name == result.source }
         return try {
@@ -103,7 +109,8 @@ fun TorrentSource.open(
     result: SearchResult,
     engine: TorrentEngine,
 ): TorrentHandle =
-    result.magnet
-        .takeIf { it.isNotEmpty() }
+    runCatching { magnet(result) }
+        .getOrNull()
+        .takeUnless { it.isNullOrEmpty() }
         ?.let { runCatching { engine.openMagnet(it, MAGNET_FIRST_MS) }.getOrNull() }
         ?: engine.openTorrent(torrentFile(result))

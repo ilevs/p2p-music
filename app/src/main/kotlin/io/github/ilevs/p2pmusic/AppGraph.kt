@@ -18,6 +18,7 @@ import io.github.ilevs.p2pmusic.playback.TorrentDataSource
 import io.github.ilevs.p2pmusic.search.AllSources
 import io.github.ilevs.p2pmusic.search.Knaben
 import io.github.ilevs.p2pmusic.search.MemoryCookieJar
+import io.github.ilevs.p2pmusic.search.NnmClub
 import io.github.ilevs.p2pmusic.search.ProxySettings
 import io.github.ilevs.p2pmusic.search.RuTracker
 import io.github.ilevs.p2pmusic.search.Rutor
@@ -88,7 +89,7 @@ class AppGraph(
     private val sources =
         AllSources(
             listOf(tracker, Rutor(client = ::trackerClient)),
-            fallback = listOf(Knaben(client = ::trackerClient)),
+            fallback = listOf(Knaben(client = ::trackerClient), NnmClub(client = ::trackerClient)),
         )
 
     val search = SearchController(sources, tracker, soulseek, settings, scope, io)
