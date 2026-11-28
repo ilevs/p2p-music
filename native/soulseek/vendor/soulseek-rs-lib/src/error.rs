@@ -5,7 +5,7 @@ use std::{error::Error, fmt};
 pub enum SoulseekRs {
     NetworkError(std::io::Error),
     /// Authentication failed during login
-    AuthenticationFailed,
+    AuthenticationFailed(String),
     /// Error parsing messages or data
     ParseError(String),
     /// Operation timed out
@@ -28,8 +28,8 @@ impl fmt::Display for SoulseekRs {
             Self::NetworkError(err) => {
                 write!(f, "Network error: {err}")
             }
-            Self::AuthenticationFailed => {
-                write!(f, "Authentication failed")
+            Self::AuthenticationFailed(reason) => {
+                write!(f, "Authentication failed: {reason}")
             }
             Self::ParseError(msg) => write!(f, "Parse error: {msg}"),
             Self::Timeout => write!(f, "Operation timed out"),
