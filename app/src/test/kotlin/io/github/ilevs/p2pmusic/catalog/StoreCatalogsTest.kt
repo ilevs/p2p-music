@@ -57,7 +57,9 @@ class StoreCatalogsTest {
         assertEquals(emptyList<Album>(), mergeAlbums(emptyList()))
         val undated = Album("deezer:6", "The Dark Side of the Moon", "Pink Floyd", "")
         val dated = Album("7", "The Dark Side of the Moon", "Pink Floyd", "1973")
-        assertEquals(listOf(undated.copy(year = "1973")), mergeAlbums(listOf(listOf(undated), listOf(dated))))
+        val reissue = dated.copy(id = "itunes:8", year = "2011")
+        val merged = mergeAlbums(listOf(listOf(undated), listOf(reissue), listOf(dated)))
+        assertEquals(listOf(undated.copy(year = "1973")), merged)
     }
 
     private companion object {

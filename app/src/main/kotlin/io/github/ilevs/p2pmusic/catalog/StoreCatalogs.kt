@@ -54,9 +54,9 @@ internal fun mergeAlbums(catalogs: List<List<Album>>): List<Album> =
     (0 until (catalogs.maxOfOrNull { it.size } ?: 0))
         .flatMap { i -> catalogs.mapNotNull { it.getOrNull(i) } }
         .groupBy { normalize(it.artist) + "|" + normalize(it.title) }
-        // Deezer gives no year; the user tells albums apart by it, so another catalog's year fills it in.
+        // Deezer gives no year and iTunes may give a reissue's; the user tells albums apart by the first release's.
         .values
-        .map { same -> same[0].copy(year = same.map { it.year }.firstOrNull(String::isNotEmpty).orEmpty()) }
+        .map { same -> same[0].copy(year = same.map { it.year }.filter(String::isNotEmpty).minOrNull().orEmpty()) }
 
 internal fun parseDeezerAlbums(json: String): List<Album> {
     val root = JSONObject(json)
